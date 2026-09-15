@@ -1,0 +1,18 @@
+# Binaries
+bin/
+*.exe
+*.out
+
+# OS files
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Go
+*.test
+coverage.out
+
+# Temporary files
+tmp/
