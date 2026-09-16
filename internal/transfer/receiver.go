@@ -77,3 +77,60 @@ func ReceiveBytes(
 		}
 	}
 }
+
+// StreamReceiver reassembles chunks delivered via asynchronous packet channels.
+type StreamReceiver struct {
+	orderedReceiver  *network.OrderedReceiver
+	reassembler      *Reassembler
+	expectedSize     int64
+	expectedChecksum uint32
+	outputPath       string
+	progress         cli.ProgressFunc
+	chunkChan        chan protocol.Packet
+}
+
+// NewStreamReceiver initializes a StreamReceiver for incoming transfers.
+func NewStreamReceiver(
+	startSequence uint32,
+	expectedSize int64,
+	expectedChecksum uint32,
+	outputPath string,
+	progress cli.ProgressFunc,
+) *StreamReceiver {
+	return &StreamReceiver{
+		orderedReceiver:  network.NewOrderedReceiver(startSequence),
+		reassembler:      NewReassembler(expectedSize, expectedChecksum),
+		expectedSize:     expectedSize,
+		expectedChecksum: expectedChecksum,
+		outputPath:       outputPath,
+		progress:         progress,
+		chunkChan:        make(chan protocol.Packet, 500),
+	}
+}
+
+// Feed inputs a received FileChunk or FileEnd packet into the stream.
+func (s *StreamReceiver) Feed(packet protocol.Packet) {
+	select {
+	case s.chunkChan <- packet:
+	default:
+	}
+}
+
+// ProcessChunk processes a single chunk directly and returns true when transfer finishes.
+func (s *StreamReceiver) ProcessChunk(packet protocol.Packet) (bool, error) {
+	deliveredPackets := s.orderedReceiver.Receive(packet)
+	for _, delivered := range deliveredPackets {
+		switch delivered.Type {
+		case protocol.FileChunk:
+			s.reassembler.AddChunk(delivered.Payload)
+			if s.progress != nil {
+				s.progress(s.reassembler.ReceivedBytes(), s.expectedSize)
+			}
+		case protocol.FileEnd:
+			err := s.reassembler.SaveToFile(s.outputPath)
+			return true, err
+		}
+	}
+	return false, nil
+}
+

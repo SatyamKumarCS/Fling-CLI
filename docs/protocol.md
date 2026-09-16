@@ -1,0 +1,103 @@
+# Fling Wire Protocol Specification (RFC-Style)
+
+**Status:** Informational / Standard Specification  
+**Version:** 1.0.0  
+**Author:** Satyam  
+**Transport:** Raw UDP / IPv4  
+
+---
+
+## 1. Abstract
+
+Fling is a lightweight, zero-configuration peer-to-peer (P2P) file transfer and direct messaging protocol designed for local area networks (LANs). It operates exclusively over raw UDP datagrams without reliance on centralized servers, cloud relays, or TCP transport, providing built-in reliability (Stop-and-Wait ARQ / Selective Retransmission), packet deduplication, out-of-order reassembly, and end-to-end CRC32 integrity verification.
+
+---
+
+## 2. Packet Wire Format
+
+Every Fling packet consists of a fixed **11-byte header** in Network Byte Order (Big Endian), followed by a variable-length payload.
+
+```text
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Sequence Number                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     Type      |        Payload Length         |    CRC32 ...  |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|      ... Checksum             |            Payload ...        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                          ... Payload                          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
+
+### 2.1 Header Fields
+
+1. **Sequence Number (4 Bytes, `uint32`, Big-Endian):**
+   - Identifies the packet in an ordered stream or exchange.
+   - For `ACK` packets, corresponds to the acknowledged packet sequence number.
+
+2. **Packet Type (1 Byte, `uint8`):**
+   - Declares the control or data category of the datagram (see Section 3).
+
+3. **Payload Length (2 Bytes, `uint16`, Big-Endian):**
+   - Length of the trailing payload buffer in bytes (0 to 65,535).
+
+4. **Checksum (4 Bytes, `uint32`, Big-Endian):**
+   - IEEE 802.3 CRC32 checksum computed across the first 7 header bytes plus the entire payload buffer.
+   - Corrupted datagrams failing CRC verification are dropped immediately without ACK.
+
+---
+
+## 3. Packet Types
+
+| Type Code | Constant Name | Semantics | Payload Format |
+|---|---|---|---|
+| `0x01` | `PRESENCE` | LAN broadcast announcement | JSON: `{"Hostname":"...","SessionID":"...","Port":9999}` |
+| `0x02` | `TRANSFER_REQUEST` | Outgoing file transfer initiation | Pipe-delimited: `<filename>\|<filesize_bytes>\|<crc32_hex>` |
+| `0x03` | `TRANSFER_ACCEPT` | Recipient consent to receive file | Empty or optional handshake response |
+| `0x04` | `TRANSFER_REJECT` | Recipient refusal of transfer | Empty or optional rejection reason |
+| `0x05` | `MSG` | Direct P2P text message | JSON: `{"Sender":"...","Content":"...","Timestamp":12345}` |
+| `0x06` | `FILE_CHUNK` | Fixed-size binary file slice | Raw binary slice (default: 1024 bytes) |
+| `0x07` | `FILE_END` | Transfer completion sentinel | Empty |
+| `0x08` | `ACK` | Transmission acknowledgement | Empty |
+
+---
+
+## 4. Protocol Phases
+
+### 4.1 Peer Discovery
+1. Nodes periodically (every 2.0s) broadcast a `PRESENCE` packet to `255.255.255.255:9999` and all detected interface broadcast masks.
+2. Nodes listen on UDP port 9999 (or fallback ports 9998, 9997...).
+3. Discovered peers are recorded with `Hostname`, `IP`, `Port`, `SessionID`, and `LastSeen`.
+4. Nodes not heard from within **10 seconds** are expired and pruned from the peer list.
+
+### 4.2 Consent Handshake
+1. **Initiator:** Sends `TRANSFER_REQUEST` with sequence $S$.
+2. **Responder:** Interactively displays prompt with filename and human-formatted size.
+3. **Response:**
+   - If accepted, responder sends `TRANSFER_ACCEPT` with sequence $S+1$.
+   - If declined, responder sends `TRANSFER_REJECT` with sequence $S+1$.
+4. **Timeout:** If no response is received within **30 seconds**, initiator aborts cleanly.
+
+### 4.3 Reliable Data Transfer (Stop-and-Wait ARQ)
+1. Sender segments file into 1024-byte `FILE_CHUNK` packets with sequential sequence numbers.
+2. For each chunk:
+   - Sender transmits packet and starts retransmission timer (initial: 500ms).
+   - Receiver validates CRC32, reorders chunk into memory buffer, and replies with `ACK` (matching sequence number).
+   - If ACK is not received before deadline, sender retransmits with exponential backoff up to **6 retries**.
+   - If maximum retries are exhausted, transfer is aborted with error.
+3. Upon transmitting all chunks, sender transmits `FILE_END` packet.
+
+### 4.4 End-to-End Verification
+1. Receiver verifies all contiguous sequence chunks $[S_{start}, S_{end}]$ are present.
+2. Receiver calculates IEEE CRC32 checksum of entire assembled file.
+3. Receiver compares computed CRC32 against expected checksum received in `TRANSFER_REQUEST`.
+4. If checksums match, file is committed to disk (`<filename>` or `received_<filename>`). If mismatch, file is discarded with error.
+
+---
+
+## 5. Security & Scope Considerations
+- **Intended Scope:** Local Area Network (LAN) / Same broadcast domain.
+- **Zero Configuration:** No hardcoded IPs or central registry required.
+- **Observability:** Explicit logging for packet delivery, ACKs, retransmissions, and checksums.

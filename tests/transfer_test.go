@@ -353,3 +353,35 @@ func TestProgressBarFormatting(t *testing.T) {
 		t.Errorf("expected progress bar to contain 50.0%%, got: %s", formatted)
 	}
 }
+
+func TestResolveFilePath(t *testing.T) {
+	// 1. Direct path
+	p1, info, err := transfer.ResolveFilePath("tests/test.txt")
+	if err != nil || info == nil || !strings.HasSuffix(p1, "tests/test.txt") {
+		t.Errorf("failed to resolve direct path tests/test.txt: %v", err)
+	}
+
+	// 2. Quoted path (from drag and drop)
+	p2, info, err := transfer.ResolveFilePath("\"tests/test.txt\"")
+	if err != nil || info == nil || !strings.HasSuffix(p2, "tests/test.txt") {
+		t.Errorf("failed to resolve quoted path: %v", err)
+	}
+
+	// 3. Typo variation (test/test.txt -> tests/test.txt)
+	p3, info, err := transfer.ResolveFilePath("test/test.txt")
+	if err != nil || info == nil || !strings.HasSuffix(p3, "tests/test.txt") {
+		t.Errorf("failed to resolve variation test/test.txt: %v", err)
+	}
+
+	// 4. Filename only fallback
+	p4, info, err := transfer.ResolveFilePath("test.txt")
+	if err != nil || info == nil || !strings.HasSuffix(p4, "test.txt") {
+		t.Errorf("failed to resolve filename only test.txt: %v", err)
+	}
+
+	// 5. Non-existent file
+	_, _, err = transfer.ResolveFilePath("non_existent_dir/completely_missing_file_12345.xyz")
+	if err == nil {
+		t.Errorf("expected error for non-existent file, got nil")
+	}
+}
