@@ -1,7 +1,7 @@
-# 🚀 Fling
+# Fling
 
 > **Fast, Zero-Configuration Peer-to-Peer File Transfer & Messaging for your Terminal.**  
-> AirDrop-like simplicity, built from scratch on raw UDP with a custom reliable ARQ protocol, automatic LAN peer discovery, and a modern Lazygit-style Terminal UI (TUI).
+> AirDrop-like simplicity over local networks, built from scratch on raw UDP with a custom reliable ARQ protocol, automatic LAN peer discovery, and a modern Lazygit-style Terminal UI (TUI).
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![CI & PR Checks](https://github.com/SatyamKumarCS/Fling-CLI/actions/workflows/ci.yml/badge.svg)](https://github.com/SatyamKumarCS/Fling-CLI/actions/workflows/ci.yml)
@@ -17,18 +17,18 @@
 
 ---
 
-## ✨ Features
+## Features
 
-- 🔍 **Zero-Config Discovery**: Automatically finds active peers on the LAN via UDP subnet broadcast (stale peers pruned after 10s).
-- 🛡️ **Custom Reliable UDP Protocol**: Stop-and-Wait ARQ, sequence numbers, packet deduplication, and out-of-order chunk reassembly built directly on raw sockets (no TCP/HTTP).
-- 🤝 **Consent-First Handshake**: Senders request transfer with file metadata; transfers only begin upon recipient confirmation.
-- 🔒 **End-to-End CRC32 Integrity**: Packets and fully reassembled files are verified with IEEE CRC32 checksums (zero silent corruption).
-- 📂 **Native File Manager Reveal**: Press <kbd>o</kbd> to immediately highlight received files in macOS Finder, Windows Explorer, or Linux File Managers.
-- 💬 **Direct Instant Messaging**: Chat directly with any online peer without initiating file transfers.
+- **Zero-Config Discovery**: Automatically finds active peers on the LAN via UDP subnet broadcast (stale peers pruned after 10s).
+- **Custom Reliable UDP Protocol**: Stop-and-Wait ARQ, sequence numbers, packet deduplication, and out-of-order chunk reassembly built directly on raw sockets (no TCP/HTTP).
+- **Consent-First Handshake**: Senders request transfer with file metadata; transfers only begin upon recipient confirmation.
+- **End-to-End CRC32 Integrity**: Packets and fully reassembled files are verified with IEEE CRC32 checksums (zero silent corruption).
+- **Native File Manager Reveal**: Press <kbd>o</kbd> to immediately highlight received files in macOS Finder, Windows Explorer, or Linux File Managers.
+- **Direct Instant Messaging**: Chat directly with any online peer without initiating file transfers.
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### Option 1: One-Line Installer (macOS & Linux)
 ```bash
@@ -49,7 +49,7 @@ make install
 
 ---
 
-## 🚀 Usage
+## Usage
 
 ### 1. Interactive Dashboard (TUI)
 
@@ -93,13 +93,13 @@ fling msg "Deployment complete on staging server." --to 1
 
 ---
 
-## 📑 Protocol Specification
+## Protocol Specification
 
 For the complete RFC-style technical specification of the 11-byte binary packet wire format, Stop-and-Wait ARQ state machines, and retransmission timing, see **[docs/protocol.md](docs/protocol.md)**.
 
 ---
 
-## 🧪 Testing
+## Testing
 
 Run the full automated test suite (including 30% simulated packet loss and race detection):
 
@@ -109,12 +109,12 @@ go test -v -race ./...
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions and issues are welcome! Feel free to check the [issues page](https://github.com/SatyamKumarCS/Fling-CLI/issues).
 
 ---
 
-## 📄 License
+## License
 
 MIT License © 2026 [Satyam Kumar](https://github.com/SatyamKumarCS)
