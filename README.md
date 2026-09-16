@@ -93,9 +93,10 @@ fling msg "Deployment complete on staging server." --to 1
 
 ---
 
-## Protocol Specification
+## Architecture & Protocol Specification
 
-For the complete RFC-style technical specification of the 11-byte binary packet wire format, Stop-and-Wait ARQ state machines, and retransmission timing, see **[docs/protocol.md](docs/protocol.md)**.
+- **System Architecture (HLD & LLD)**: For the full High-Level Design, Low-Level Design, and component state machines, see **[docs/architecture.md](docs/architecture.md)**.
+- **Wire Protocol RFC Specification**: For the 11-byte binary packet wire format, Stop-and-Wait ARQ state machines, and retransmission timing, see **[docs/protocol.md](docs/protocol.md)**.
 
 ---
 
