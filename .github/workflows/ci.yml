@@ -1,0 +1,70 @@
+name: CI & PR Checks
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Test & Race Detection (${{ matrix.os }}, Go ${{ matrix.go-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+        go-version: [ '1.22.x', 'stable' ]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Verify Go Modules
+        run: |
+          go mod verify
+
+      - name: Run Go Vet
+        run: |
+          go vet ./...
+
+      - name: Run Unit & Integration Tests with Race Detector
+        run: |
+          go test -v -race ./...
+
+      - name: Test Binary Compilation
+        run: |
+          go build -v -o fling ./cmd/fling
+
+  cross-compile:
+    name: Cross-Platform Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Compile for Linux (amd64 / arm64)
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o bin/fling-linux-amd64 ./cmd/fling
+          GOOS=linux GOARCH=arm64 go build -o bin/fling-linux-arm64 ./cmd/fling
+
+      - name: Compile for macOS (Apple Silicon & Intel)
+        run: |
+          GOOS=darwin GOARCH=arm64 go build -o bin/fling-darwin-arm64 ./cmd/fling
+          GOOS=darwin GOARCH=amd64 go build -o bin/fling-darwin-amd64 ./cmd/fling
+
+      - name: Compile for Windows (amd64)
+        run: |
+          GOOS=windows GOARCH=amd64 go build -o bin/fling-windows-amd64.exe ./cmd/fling
