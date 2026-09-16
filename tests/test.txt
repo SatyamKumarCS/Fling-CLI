@@ -1,0 +1,10 @@
+This is a test file for the Fling CLI.
+
+It contains multiple lines of text to verify that file transfers work correctly.
+
+We should be able to send this file to another Fling node and receive it without any issues.
+
+Multiple lines help verify chunking and reassembly.
+
+
+Testing file transfer functionality.
