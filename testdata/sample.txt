@@ -1,0 +1,20 @@
+======================================================================
+Fling P2P File Transfer - Sample Test Document
+======================================================================
+
+Project: Fling CLI
+Protocol: Reliable UDP (Stop-and-Wait ARQ)
+Chunk Size: 1024 Bytes
+Integrity: IEEE 802.3 CRC32 Checksum
+
+This sample file is designed for testing peer-to-peer file transfers
+across local area networks (LANs). When transferring this file:
+
+1. Handshake consent negotiation is triggered on the destination node.
+2. The payload is split into fixed 1024-byte chunks.
+3. Chunks are transmitted, ACKed, and reordered asynchronously.
+4. The full reconstructed file is validated using CRC32 checksums.
+5. The received file is saved to disk and can be revealed in Finder.
+
+Testing complete: The quick brown fox jumps over the lazy dog!
+======================================================================
