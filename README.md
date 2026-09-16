@@ -4,6 +4,7 @@
 > AirDrop-like simplicity over local networks, built from scratch on raw UDP with a custom reliable ARQ protocol, automatic LAN peer discovery, and a modern Lazygit-style Terminal UI (TUI).
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
 [![CI & PR Checks](https://github.com/SatyamKumarCS/Fling-CLI/actions/workflows/ci.yml/badge.svg)](https://github.com/SatyamKumarCS/Fling-CLI/actions/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20|%20Linux%20|%20Windows-blueviolet?style=flat)](https://github.com/SatyamKumarCS/Fling-CLI)
 [![Tests](https://img.shields.io/badge/Tests-24%20Passed%20(100%25)-50FA7B?style=flat)](https://github.com/SatyamKumarCS/Fling-CLI)
