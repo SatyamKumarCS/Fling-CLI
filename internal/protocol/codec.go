@@ -97,8 +97,10 @@ func Decode(data []byte) (Packet, error) {
 
 	payload := make([]byte, payloadLength)
 
-	if _, err := reader.Read(payload); err != nil {
-		return Packet{}, err
+	if payloadLength > 0 {
+		if _, err := reader.Read(payload); err != nil {
+			return Packet{}, err
+		}
 	}
 
 	// Recreate the data that was originally checksummed.
