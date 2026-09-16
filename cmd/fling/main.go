@@ -38,6 +38,8 @@ func main() {
 		cli.PrintHelp()
 	case "version", "--version", "-v":
 		fmt.Printf("Fling CLI v%s\n", cli.Version)
+	case "uninstall":
+		runUninstall()
 	case "send":
 		runSend(args[1:])
 	case "msg", "message":
@@ -420,4 +422,28 @@ func resolvePeerAddr(target string) (*net.UDPAddr, error) {
 
 	// Fallback: try resolving target as a hostname with default port
 	return net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", target, discovery.DiscoveryPort))
+}
+
+func runUninstall() {
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("[ERROR] Could not determine executable location: %v\n", err)
+		os.Exit(1)
+	}
+
+	resolvedPath, err := filepath.EvalSymlinks(execPath)
+	if err == nil {
+		execPath = resolvedPath
+	}
+
+	fmt.Printf("==> Removing Fling binary from %s...\n", execPath)
+	err = os.Remove(execPath)
+	if err != nil {
+		fmt.Printf("[ERROR] Failed to remove %s: %v\n", execPath, err)
+		fmt.Println("Tip: Try running with sudo: sudo rm -f", execPath)
+		os.Exit(1)
+	}
+
+	successStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00E676"))
+	fmt.Printf("%s Successfully uninstalled Fling from %s\n", successStyle.Render("[SUCCESS]"), execPath)
 }

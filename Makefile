@@ -26,13 +26,16 @@ install: build
 	fi
 	@echo "==> Successfully installed $(BINARY_NAME) to $(INSTALL_DIR)/$(BINARY_NAME)"
 
-## uninstall: Remove fling from /usr/local/bin
+## uninstall: Remove fling binary from system PATH
 uninstall:
 	@echo "==> Uninstalling $(BINARY_NAME)..."
-	@if [ -w "$(INSTALL_DIR)" ]; then \
-		rm -f $(INSTALL_DIR)/$(BINARY_NAME); \
-	else \
-		sudo rm -f $(INSTALL_DIR)/$(BINARY_NAME); \
+	@rm -f $(HOME)/.local/bin/$(BINARY_NAME) $(HOME)/go/bin/$(BINARY_NAME)
+	@if [ -f "$(INSTALL_DIR)/$(BINARY_NAME)" ]; then \
+		if [ -w "$(INSTALL_DIR)" ]; then \
+			rm -f $(INSTALL_DIR)/$(BINARY_NAME); \
+		else \
+			sudo rm -f $(INSTALL_DIR)/$(BINARY_NAME); \
+		fi \
 	fi
 	@echo "==> Successfully uninstalled $(BINARY_NAME)"
 

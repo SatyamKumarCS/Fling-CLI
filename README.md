@@ -99,6 +99,31 @@ For the complete RFC-style technical specification of the 11-byte binary packet 
 
 ---
 
+## Verification & Uninstallation
+
+### Verify Installation
+```bash
+# Check installed version
+fling version
+
+# Check binary path in $PATH
+which fling
+
+# View command guide & flags
+fling --help
+```
+
+### Uninstallation
+```bash
+# Option 1: Native CLI command
+fling uninstall
+
+# Option 2: Via Makefile
+make uninstall
+```
+
+---
+
 ## Testing
 
 Run the full automated test suite (including 30% simulated packet loss and race detection):

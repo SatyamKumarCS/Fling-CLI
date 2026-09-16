@@ -32,6 +32,8 @@ USAGE:
   fling send <file> --to <peer>          Send a file directly to a peer
   fling msg "<text>" --to <peer>         Send a text message directly to a peer
   fling peers                            Discover and display active peers
+  fling version                          Show version information
+  fling uninstall                        Remove Fling from this machine
 
 FLAGS:
   --to, -t <peer>                        Target peer (Hostname, IP:Port, or Session ID)
@@ -53,6 +55,9 @@ EXAMPLES:
   # Send a file to a peer
   fling send document.pdf --to 127.0.0.1:9999
   fling send photos.zip --to bob-desktop
+
+  # Uninstall Fling
+  fling uninstall
 `
 	fmt.Println(help)
 }
