@@ -28,7 +28,7 @@ func main() {
 	args := os.Args[1:]
 
 	if len(args) == 0 {
-		runTUI(discovery.DiscoveryPort)
+		runTUI(discovery.DiscoveryPort, "")
 		return
 	}
 
@@ -47,10 +47,18 @@ func main() {
 	case "peers", "list":
 		runPeers(args[1:])
 	default:
-		// Check for --port or -p flag when running as TUI listener
 		port := parsePortFlag(args)
-		if port > 0 {
-			runTUI(port)
+		if port <= 0 {
+			port = discovery.DiscoveryPort
+		}
+		peer := parsePeerFlag(args)
+		// Support "fling 10.7.12.154" directly
+		if peer == "" && len(args) == 1 && (net.ParseIP(args[0]) != nil || strings.Contains(args[0], ".")) {
+			peer = args[0]
+		}
+
+		if peer != "" || port != discovery.DiscoveryPort || hasFlag(args, "--port", "-p", "--peer", "-c", "--connect") {
+			runTUI(port, peer)
 			return
 		}
 
@@ -58,6 +66,32 @@ func main() {
 		cli.PrintHelp()
 		os.Exit(1)
 	}
+}
+
+func parsePeerFlag(args []string) string {
+	for i := 0; i < len(args); i++ {
+		if (args[i] == "--peer" || args[i] == "-c" || args[i] == "--connect") && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(args[i], "--peer=") {
+			return strings.TrimPrefix(args[i], "--peer=")
+		}
+		if strings.HasPrefix(args[i], "--connect=") {
+			return strings.TrimPrefix(args[i], "--connect=")
+		}
+	}
+	return ""
+}
+
+func hasFlag(args []string, flags ...string) bool {
+	for _, arg := range args {
+		for _, f := range flags {
+			if arg == f || strings.HasPrefix(arg, f+"=") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func parsePortFlag(args []string) int {
@@ -85,7 +119,7 @@ func generateSessionID() string {
 	return hex.EncodeToString(b)
 }
 
-func runTUI(port int) {
+func runTUI(port int, initialPeer string) {
 	hostname, err := os.Hostname()
 	if err != nil || hostname == "" {
 		hostname = "fling-node"
@@ -111,6 +145,11 @@ func runTUI(port int) {
 	disco := discovery.NewDiscovery(hostname, sessionID, port)
 	router := network.NewRouter(conn)
 
+	// If an initial peer IP was provided via CLI, ping it immediately
+	if initialPeer != "" {
+		_ = disco.PingPeer(conn, initialPeer, discovery.DiscoveryPort)
+	}
+
 	// Create Bubbletea TUI Model
 	model := tui.NewModel(hostname, sessionID, port, router, disco)
 	p := tea.NewProgram(model, tea.WithAltScreen())
@@ -121,18 +160,18 @@ func runTUI(port int) {
 		peer, isNew := disco.HandlePresence(packet, addr.IP.String())
 		if isNew {
 			p.Send(tui.PeerEventMsg{})
-			// Immediate bidirectional presence response: reply directly to the peer
+			// Immediate bidirectional presence response: reply directly to sender
 			respPacket := discovery.CreatePresencePacket(disco.Hostname, disco.SessionID, disco.Port, 0)
 			if encoded, err := protocol.Encode(respPacket); err == nil {
-				targetPort := peer.Port
-				if targetPort <= 0 {
-					targetPort = discovery.DiscoveryPort
+				// Reply to sender's source port
+				_, _ = router.Conn().WriteToUDP(encoded, addr)
+				// Also reply to their service port if different
+				if peer.Port > 0 && peer.Port != addr.Port {
+					_, _ = router.Conn().WriteToUDP(encoded, &net.UDPAddr{
+						IP:   addr.IP,
+						Port: peer.Port,
+					})
 				}
-				targetAddr := &net.UDPAddr{
-					IP:   addr.IP,
-					Port: targetPort,
-				}
-				_, _ = router.Conn().WriteToUDP(encoded, targetAddr)
 			}
 		}
 	}

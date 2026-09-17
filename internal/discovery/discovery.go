@@ -268,9 +268,9 @@ func (d *Discovery) BroadcastPresence(conn *net.UDPConn, targetPort int) error {
 	return nil
 }
 
-// SweepLocalSubnet sends unicast presence packets across the local /24 subnet(s)
-// of active network interfaces. This guarantees discovery even on Wi-Fi networks with
-// AP Client Isolation or broadcast/multicast suppression enabled.
+// SweepLocalSubnet sends unicast presence packets across the local subnet(s)
+// of active network interfaces. This guarantees discovery even on large campus/enterprise
+// Wi-Fi networks (e.g. /19, /20, /24) with AP Client Isolation or broadcast suppression enabled.
 func (d *Discovery) SweepLocalSubnet(conn *net.UDPConn, targetPort int) {
 	if conn == nil {
 		return
@@ -304,21 +304,46 @@ func (d *Discovery) SweepLocalSubnet(conn *net.UDPConn, targetPort int) {
 				continue
 			}
 			ip := ipNet.IP.To4()
-			base0 := ip[0]
-			base1 := ip[1]
-			base2 := ip[2]
-			selfHost := ip[3]
+			mask := ipNet.Mask
+			if len(mask) != 4 {
+				continue
+			}
 
+			startNet := ip.Mask(mask)
+			bcastIP := net.IPv4(
+				ip[0]|^mask[0],
+				ip[1]|^mask[1],
+				ip[2]|^mask[2],
+				ip[3]|^mask[3],
+			)
+
+			// 1. Immediately sweep the host's own /24 block first (fast path)
 			go func(b0, b1, b2, self byte) {
 				for host := 1; host <= 254; host++ {
 					if byte(host) == self {
-						continue // skip own IP
+						continue
 					}
 					targetIP := net.IPv4(b0, b1, b2, byte(host))
 					targetAddr := &net.UDPAddr{IP: targetIP, Port: targetPort}
 					_, _ = conn.WriteToUDP(encoded, targetAddr)
 				}
-			}(base0, base1, base2, selfHost)
+			}(ip[0], ip[1], ip[2], ip[3])
+
+			// 2. If the subnet mask is larger than /24 (e.g. /19 or /20), sweep the remaining blocks in the subnet
+			if startNet[2] != bcastIP[2] {
+				go func(b0, b1, start3, end3, cur3, self byte) {
+					for octet3 := int(start3); octet3 <= int(end3); octet3++ {
+						if byte(octet3) == cur3 {
+							continue // already swept in fast path
+						}
+						for host := 1; host <= 254; host++ {
+							targetIP := net.IPv4(b0, b1, byte(octet3), byte(host))
+							targetAddr := &net.UDPAddr{IP: targetIP, Port: targetPort}
+							_, _ = conn.WriteToUDP(encoded, targetAddr)
+						}
+					}
+				}(ip[0], ip[1], startNet[2], bcastIP[2], ip[2], ip[3])
+			}
 		}
 	}
 }
