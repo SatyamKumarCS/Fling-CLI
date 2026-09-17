@@ -31,6 +31,9 @@
 
 ## Installation
 
+> [!NOTE]
+> **Prerequisite:** The **Go compiler (Go 1.21+)** is required to build and install Fling. Download Go from [go.dev/dl](https://go.dev/dl/) or install via your package manager (`brew install go` on macOS, `sudo apt install golang` on Debian/Ubuntu).
+
 ### Option 1: One-Line Installer (macOS & Linux)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/SatyamKumarCS/Fling-CLI/main/install.sh | bash
@@ -65,7 +68,7 @@ fling
 | <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> | **Switch Pane** | Cycle focus between Peers, Info, Chat, and Transfers |
 | <kbd>1</kbd>–<kbd>4</kbd> | **Jump to Pane** | Directly activate Pane 1, 2, 3, or 4 |
 | <kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>k</kbd> / <kbd>j</kbd> | **Select Peer** | Highlight a peer in the Discovered Peers list |
-| <kbd>F</kbd> / <kbd>s</kbd> | **Send File** | Open file selector dialog (supports drag-and-drop & path resolution) |
+| <kbd>F</kbd> / <kbd>s</kbd> | **Send File** | Open file dialog (press <kbd>Ctrl+O</kbd> for Finder picker or drag-and-drop) |
 | <kbd>Enter</kbd> / <kbd>c</kbd> | **Chat** | Focus Chat pane to type a live message |
 | <kbd>o</kbd> / <kbd>O</kbd> | **Reveal in Finder** | Reveal the received file in Finder / File Explorer |
 | <kbd>y</kbd> / <kbd>n</kbd> | **Accept / Decline** | Accept or reject incoming transfer requests |

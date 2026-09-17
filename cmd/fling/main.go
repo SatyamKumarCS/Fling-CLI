@@ -118,9 +118,22 @@ func runTUI(port int) {
 
 	// Wire router event handlers to Bubbletea program
 	router.OnPresence = func(packet protocol.Packet, addr *net.UDPAddr) {
-		_, isNew := disco.HandlePresence(packet, addr.IP.String())
+		peer, isNew := disco.HandlePresence(packet, addr.IP.String())
 		if isNew {
 			p.Send(tui.PeerEventMsg{})
+			// Immediate bidirectional presence response: reply directly to the peer
+			respPacket := discovery.CreatePresencePacket(disco.Hostname, disco.SessionID, disco.Port, 0)
+			if encoded, err := protocol.Encode(respPacket); err == nil {
+				targetPort := peer.Port
+				if targetPort <= 0 {
+					targetPort = discovery.DiscoveryPort
+				}
+				targetAddr := &net.UDPAddr{
+					IP:   addr.IP,
+					Port: targetPort,
+				}
+				_, _ = router.Conn().WriteToUDP(encoded, targetAddr)
+			}
 		}
 	}
 

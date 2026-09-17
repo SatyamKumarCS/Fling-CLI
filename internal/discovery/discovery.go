@@ -225,7 +225,8 @@ func (d *Discovery) FindPeer(target string) (Peer, bool) {
 	return Peer{}, false
 }
 
-// BroadcastPresence broadcasts a presence packet over the network to LAN broadcast and loopback ports.
+// BroadcastPresence broadcasts a presence packet over the network to LAN broadcast,
+// multicast groups, local subnet sweep, and loopback ports.
 func (d *Discovery) BroadcastPresence(conn *net.UDPConn, targetPort int) error {
 	if targetPort <= 0 {
 		targetPort = DiscoveryPort
@@ -256,12 +257,102 @@ func (d *Discovery) BroadcastPresence(conn *net.UDPConn, targetPort int) error {
 			}
 		}
 		d.mu.RUnlock()
+
+		// 2. Active subnet sweep (bypasses Wi-Fi AP broadcast suppression & client isolation)
+		d.SweepLocalSubnet(conn, targetPort)
 	}
 
-	// 2. Send via interface-specific sockets for physical LAN routing on macOS/Linux
+	// 3. Send via interface-specific sockets for physical LAN routing on macOS/Linux
 	sendInterfaceBroadcasts(encoded, targetPort)
 
 	return nil
+}
+
+// SweepLocalSubnet sends unicast presence packets across the local /24 subnet(s)
+// of active network interfaces. This guarantees discovery even on Wi-Fi networks with
+// AP Client Isolation or broadcast/multicast suppression enabled.
+func (d *Discovery) SweepLocalSubnet(conn *net.UDPConn, targetPort int) {
+	if conn == nil {
+		return
+	}
+	if targetPort <= 0 {
+		targetPort = DiscoveryPort
+	}
+
+	packet := CreatePresencePacket(d.Hostname, d.SessionID, d.Port, 0)
+	encoded, err := protocol.Encode(packet)
+	if err != nil {
+		return
+	}
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return
+	}
+
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			ipNet, ok := a.(*net.IPNet)
+			if !ok || ipNet.IP.To4() == nil {
+				continue
+			}
+			ip := ipNet.IP.To4()
+			base0 := ip[0]
+			base1 := ip[1]
+			base2 := ip[2]
+			selfHost := ip[3]
+
+			go func(b0, b1, b2, self byte) {
+				for host := 1; host <= 254; host++ {
+					if byte(host) == self {
+						continue // skip own IP
+					}
+					targetIP := net.IPv4(b0, b1, b2, byte(host))
+					targetAddr := &net.UDPAddr{IP: targetIP, Port: targetPort}
+					_, _ = conn.WriteToUDP(encoded, targetAddr)
+				}
+			}(base0, base1, base2, selfHost)
+		}
+	}
+}
+
+// PingPeer sends an immediate unicast presence announcement to a specific IP or hostname.
+func (d *Discovery) PingPeer(conn *net.UDPConn, targetHost string, targetPort int) error {
+	if conn == nil {
+		return fmt.Errorf("nil UDP connection")
+	}
+	if targetPort <= 0 {
+		targetPort = DiscoveryPort
+	}
+
+	ip := net.ParseIP(targetHost)
+	if ip == nil {
+		addrs, err := net.LookupHost(targetHost)
+		if err != nil || len(addrs) == 0 {
+			return fmt.Errorf("unable to resolve peer: %s", targetHost)
+		}
+		ip = net.ParseIP(addrs[0])
+		if ip == nil {
+			return fmt.Errorf("invalid resolved IP for %s", targetHost)
+		}
+	}
+
+	packet := CreatePresencePacket(d.Hostname, d.SessionID, d.Port, 0)
+	encoded, err := protocol.Encode(packet)
+	if err != nil {
+		return err
+	}
+
+	targetAddr := &net.UDPAddr{IP: ip, Port: targetPort}
+	_, err = conn.WriteToUDP(encoded, targetAddr)
+	return err
 }
 
 func sendInterfaceBroadcasts(encoded []byte, targetPort int) {
@@ -298,6 +389,8 @@ func sendInterfaceBroadcasts(encoded []byte, targetPort int) {
 				if err == nil {
 					_, _ = ifaceConn.WriteToUDP(encoded, &net.UDPAddr{IP: bcastIP, Port: targetPort})
 					_, _ = ifaceConn.WriteToUDP(encoded, &net.UDPAddr{IP: net.IPv4bcast, Port: targetPort})
+					_, _ = ifaceConn.WriteToUDP(encoded, &net.UDPAddr{IP: net.ParseIP("239.255.42.99"), Port: targetPort})
+					_, _ = ifaceConn.WriteToUDP(encoded, &net.UDPAddr{IP: net.ParseIP("224.0.0.1"), Port: targetPort})
 					ifaceConn.Close()
 				}
 			}
@@ -328,6 +421,9 @@ func getBroadcastDestinations(defaultPort int, selfPort int) []*net.UDPAddr {
 	for _, port := range ports {
 		// Global broadcast
 		addAddr(net.IPv4bcast, port)
+		// Multicast groups
+		addAddr(net.ParseIP("239.255.42.99"), port)
+		addAddr(net.ParseIP("224.0.0.1"), port)
 		// Localhost loopback
 		addAddr(net.ParseIP("127.0.0.1"), port)
 	}

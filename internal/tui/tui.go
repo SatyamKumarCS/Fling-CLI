@@ -96,6 +96,8 @@ type Model struct {
 	NotifExpiresAt       time.Time
 	ShowHelp             bool
 	SelectingFile        bool
+	ConnectingPeer       bool
+	PeerInput            textinput.Model
 }
 
 // Custom Bubbletea Messages
@@ -128,6 +130,11 @@ func NewModel(hostname, sessionID string, port int, router *network.Router, disc
 	fi.CharLimit = 500
 	fi.Width = 50
 
+	pi := textinput.New()
+	pi.Placeholder = "Enter peer IP (e.g. 10.7.5.142 or 192.168.1.50)..."
+	pi.CharLimit = 100
+	pi.Width = 50
+
 	pb := progress.New(
 		progress.WithDefaultGradient(),
 		progress.WithWidth(30),
@@ -144,6 +151,7 @@ func NewModel(hostname, sessionID string, port int, router *network.Router, disc
 		SelectedPeerIdx: 0,
 		ChatInput:       ti,
 		FileInput:       fi,
+		PeerInput:       pi,
 		ProgressBar:     pb,
 		Peers:           disco.GetPeers(),
 		Messages:        make([]ChatMessage, 0),
@@ -345,6 +353,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Direct Peer IP connection dialog handling
+		if m.ConnectingPeer {
+			switch msg.String() {
+			case "esc":
+				m.ConnectingPeer = false
+				m.PeerInput.Reset()
+				return m, nil
+			case "enter":
+				targetIP := strings.TrimSpace(m.PeerInput.Value())
+				m.ConnectingPeer = false
+				m.PeerInput.Reset()
+				if targetIP != "" && m.Router != nil {
+					err := m.Discovery.PingPeer(m.Router.Conn(), targetIP, discovery.DiscoveryPort)
+					if err != nil {
+						m.addLog("ERROR", fmt.Sprintf("Failed to ping peer %s: %v", targetIP, err))
+						m.setNotification(fmt.Sprintf("Ping failed: %v", err))
+					} else {
+						m.addLog("DISCOVERY", fmt.Sprintf("Sent direct presence ping to %s", targetIP))
+						m.setNotification(fmt.Sprintf("Pinging peer at %s...", targetIP))
+					}
+				}
+				return m, nil
+			}
+			var cmd tea.Cmd
+			m.PeerInput, cmd = m.PeerInput.Update(msg)
+			return m, cmd
+		}
+
 		// File path prompt dialog handling
 		if m.SelectingFile {
 			switch msg.String() {
@@ -447,12 +483,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+		case "p", "P", "a", "A":
+			if !m.ChatInput.Focused() {
+				m.ConnectingPeer = true
+				m.PeerInput.Focus()
+				return m, nil
+			}
+
 		case "r", "R":
 			if !m.ChatInput.Focused() {
 				if m.Router != nil {
 					_ = m.Discovery.BroadcastPresence(m.Router.Conn(), discovery.DiscoveryPort)
 				}
-				m.setNotification("Scanning LAN for active peers...")
+				m.setNotification("Scanning LAN & local subnet for active peers...")
 				return m, nil
 			}
 

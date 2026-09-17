@@ -78,6 +78,11 @@ func (m Model) View() string {
 		return overlayModal(baseScreen, modal, width, height)
 	}
 
+	if m.ConnectingPeer {
+		modal := m.renderConnectPeerModalBox(width, height)
+		return overlayModal(baseScreen, modal, width, height)
+	}
+
 	if m.IncomingModal != nil {
 		modal := m.renderIncomingModalBox(width, height)
 		return overlayModal(baseScreen, modal, width, height)
@@ -417,6 +422,47 @@ func (m Model) renderFileDialogBox(width, height int) string {
 		Render(box)
 }
 
+func (m Model) renderConnectPeerModalBox(width, height int) string {
+	boxWidth := 58
+	if boxWidth > width-6 {
+		boxWidth = width - 6
+	}
+
+	header := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(ColorBgDark).
+		Background(ColorSecondary).
+		Padding(0, 1).
+		Render("DIRECT CONNECT TO PEER IP")
+
+	hint := lipgloss.NewStyle().
+		Foreground(ColorTextDim).
+		Render("Enter peer IP (e.g. 10.7.5.142 or 192.168.1.50):")
+
+	footer := lipgloss.NewStyle().
+		Foreground(ColorMuted).
+		Render("Press [Enter] Ping & Connect  •  [Esc] Cancel")
+
+	box := lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		"",
+		hint,
+		"",
+		m.PeerInput.View(),
+		"",
+		footer,
+	)
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(ColorSecondary).
+		Background(ColorBgPanel).
+		Padding(1, 2).
+		Width(boxWidth).
+		Render(box)
+}
+
 func (m Model) renderIncomingModalBox(width, height int) string {
 	boxWidth := 60
 	if boxWidth > width-6 {
@@ -486,8 +532,9 @@ func (m Model) renderHelpBox(width, height int) string {
 		{"Up / Down", "Navigate through Discovered Peers"},
 		{"Enter / c / m", "Open live chat with selected peer"},
 		{"F / s", "Send file modal (Ctrl+O to browse Finder)"},
+		{"p / a", "Direct connect / ping peer by IP address"},
 		{"o / O", "Reveal received file / folder in Finder"},
-		{"r", "Scan / refresh LAN peer discovery"},
+		{"r", "Scan / sweep LAN & local subnet for peers"},
 		{"y / n", "Accept / Decline incoming transfer"},
 		{"Esc", "Close modal / Back to peers"},
 		{"?", "Toggle this help menu"},
@@ -540,6 +587,7 @@ func (m Model) renderFooter(width int) string {
 		{"1-4", "Jump"},
 		{"Up/Dn", "Select"},
 		{"F", "Send File"},
+		{"p", "Add IP"},
 		{"Enter", "Chat"},
 		{"o", "Finder"},
 		{"r", "Scan"},
