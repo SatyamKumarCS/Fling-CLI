@@ -10,6 +10,7 @@ import (
 	"github.com/SatyamKumarCS/Fling-CLI/internal/cli"
 	"github.com/SatyamKumarCS/Fling-CLI/internal/network"
 	"github.com/SatyamKumarCS/Fling-CLI/internal/protocol"
+	"github.com/SatyamKumarCS/Fling-CLI/internal/security"
 )
 
 // SendFile reads the specified file, splits it into chunks, reliably transmits each FileChunk packet,
@@ -22,12 +23,25 @@ func SendFile(
 	startSequence uint32,
 	progress cli.ProgressFunc,
 ) (uint32, error) {
+	return SendFileWithKey(conn, addr, filePath, nil, startSequence, progress)
+}
+
+// SendFileWithKey reads the specified file, splits it into chunks, reliably transmits each FileChunk packet,
+// optionally encrypting the entire payload with key, reports transfer progress, and sends a FileEnd packet upon completion.
+func SendFileWithKey(
+	conn *net.UDPConn,
+	addr *net.UDPAddr,
+	filePath string,
+	key []byte,
+	startSequence uint32,
+	progress cli.ProgressFunc,
+) (uint32, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return startSequence, fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}
 
-	return SendBytes(conn, addr, data, startSequence, progress)
+	return SendBytesWithKey(conn, addr, data, key, startSequence, progress)
 }
 
 // SendBytes sends a byte slice as chunks reliably over UDP to the specified destination address.
@@ -38,6 +52,26 @@ func SendBytes(
 	startSequence uint32,
 	progress cli.ProgressFunc,
 ) (uint32, error) {
+	return SendBytesWithKey(conn, addr, data, nil, startSequence, progress)
+}
+
+// SendBytesWithKey sends a byte slice as chunks reliably over UDP, optionally encrypted with key.
+func SendBytesWithKey(
+	conn *net.UDPConn,
+	addr *net.UDPAddr,
+	data []byte,
+	key []byte,
+	startSequence uint32,
+	progress cli.ProgressFunc,
+) (uint32, error) {
+	if len(key) == 32 {
+		encrypted, err := security.Encrypt(key, data)
+		if err != nil {
+			return startSequence, fmt.Errorf("file encryption failed: %w", err)
+		}
+		data = encrypted
+	}
+
 	totalBytes := int64(len(data))
 	chunks := ChunkBytes(data, startSequence)
 
@@ -83,12 +117,24 @@ func SendFileWithRouter(
 	startSequence uint32,
 	progress cli.ProgressFunc,
 ) (uint32, error) {
+	return SendFileWithRouterAndKey(router, addr, filePath, nil, startSequence, progress)
+}
+
+// SendFileWithRouterAndKey sends a file (optionally encrypted with key) using the network.Router.
+func SendFileWithRouterAndKey(
+	router *network.Router,
+	addr *net.UDPAddr,
+	filePath string,
+	key []byte,
+	startSequence uint32,
+	progress cli.ProgressFunc,
+) (uint32, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return startSequence, fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}
 
-	return SendBytesWithRouter(router, addr, data, startSequence, progress)
+	return SendBytesWithRouterAndKey(router, addr, data, key, startSequence, progress)
 }
 
 // SendBytesWithRouter sends a byte slice using the network.Router.
@@ -99,6 +145,26 @@ func SendBytesWithRouter(
 	startSequence uint32,
 	progress cli.ProgressFunc,
 ) (uint32, error) {
+	return SendBytesWithRouterAndKey(router, addr, data, nil, startSequence, progress)
+}
+
+// SendBytesWithRouterAndKey sends a byte slice (optionally encrypted with key) using the network.Router.
+func SendBytesWithRouterAndKey(
+	router *network.Router,
+	addr *net.UDPAddr,
+	data []byte,
+	key []byte,
+	startSequence uint32,
+	progress cli.ProgressFunc,
+) (uint32, error) {
+	if len(key) == 32 {
+		encrypted, err := security.Encrypt(key, data)
+		if err != nil {
+			return startSequence, fmt.Errorf("file encryption failed: %w", err)
+		}
+		data = encrypted
+	}
+
 	totalBytes := int64(len(data))
 	chunks := ChunkBytes(data, startSequence)
 

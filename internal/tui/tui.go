@@ -632,7 +632,8 @@ func (m Model) sendChatMessage(text string) tea.Cmd {
 			return AddLogMsg{Timestamp: time.Now(), Level: "ERROR", Message: fmt.Sprintf("Invalid peer addr: %v", err)}
 		}
 
-		packet, err := messaging.CreateMessage(m.Hostname, text, uint32(time.Now().UnixNano()&0xFFFF))
+		sharedKey, _ := m.Discovery.GetPeerSharedKey(targetPeer.SessionID)
+		packet, err := messaging.CreateEncryptedMessage(m.Hostname, text, sharedKey, uint32(time.Now().UnixNano()&0xFFFF))
 		if err != nil {
 			return AddLogMsg{Timestamp: time.Now(), Level: "ERROR", Message: fmt.Sprintf("Message create failed: %v", err)}
 		}
@@ -721,7 +722,7 @@ func (m Model) initiateFileSend(filePath string) tea.Cmd {
 			return nil
 		}
 
-		// Transfer Accepted! Send File Chunks
+		// Transfer Accepted! Send File Chunks (Encrypted with E2EE shared key if available)
 		if m.Program != nil {
 			m.Program.Send(AddLogMsg{
 				Timestamp: time.Now(),
@@ -730,10 +731,12 @@ func (m Model) initiateFileSend(filePath string) tea.Cmd {
 			})
 		}
 
-		_, sendErr := transfer.SendFileWithRouter(
+		sharedKey, _ := m.Discovery.GetPeerSharedKey(targetPeer.SessionID)
+		_, sendErr := transfer.SendFileWithRouterAndKey(
 			m.Router,
 			targetAddr,
 			filePath,
+			sharedKey,
 			seq+2,
 			func(transferred, total int64) {
 				if m.Program != nil {
@@ -784,6 +787,8 @@ func (m *Model) acceptIncomingTransfer(prompt IncomingTransferPrompt) tea.Cmd {
 			}
 		},
 	)
+	sharedKey, _ := m.Discovery.GetPeerSharedKeyByAddr(prompt.SenderAddr.String())
+	m.ActiveStreamReceiver.SetKey(sharedKey)
 
 	return func() tea.Msg {
 		return AddLogMsg{

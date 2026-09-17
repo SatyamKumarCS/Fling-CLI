@@ -287,7 +287,7 @@ func (d *Discovery) BroadcastPresence(conn *net.UDPConn, targetPort int) error {
 		targetPort = DiscoveryPort
 	}
 
-	packet := CreatePresencePacket(d.Hostname, d.SessionID, d.Port, 0)
+	packet := CreatePresencePacket(d.Hostname, d.SessionID, d.Port, 0, d.KeyPair.PublicKeyBytes())
 	encoded, err := protocol.Encode(packet)
 	if err != nil {
 		return err
@@ -334,7 +334,7 @@ func (d *Discovery) SweepLocalSubnet(conn *net.UDPConn, targetPort int) {
 		targetPort = DiscoveryPort
 	}
 
-	packet := CreatePresencePacket(d.Hostname, d.SessionID, d.Port, 0)
+	packet := CreatePresencePacket(d.Hostname, d.SessionID, d.Port, 0, d.KeyPair.PublicKeyBytes())
 	encoded, err := protocol.Encode(packet)
 	if err != nil {
 		return
@@ -423,7 +423,7 @@ func (d *Discovery) PingPeer(conn *net.UDPConn, targetHost string, targetPort in
 		}
 	}
 
-	packet := CreatePresencePacket(d.Hostname, d.SessionID, d.Port, 0)
+	packet := CreatePresencePacket(d.Hostname, d.SessionID, d.Port, 0, d.KeyPair.PublicKeyBytes())
 	encoded, err := protocol.Encode(packet)
 	if err != nil {
 		return err

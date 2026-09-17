@@ -206,12 +206,11 @@ func (m Model) renderNetworkPane(width, height int) string {
 
 	lblStyle := lipgloss.NewStyle().Foreground(ColorMuted).Width(10)
 	valStyle := lipgloss.NewStyle().Bold(true).Foreground(ColorSecondary)
-	txtStyle := lipgloss.NewStyle().Foreground(ColorTextLight)
 
 	var content strings.Builder
 	content.WriteString(title + "\n")
 	content.WriteString(fmt.Sprintf(" %s %s\n", lblStyle.Render("LAN IP:"), valStyle.Render(fmt.Sprintf("%s:%d", primaryIP, m.Port))))
-	content.WriteString(fmt.Sprintf(" %s %s\n", lblStyle.Render("Protocol:"), txtStyle.Render("Reliable UDP (ARQ + CRC32)")))
+	content.WriteString(fmt.Sprintf(" %s %s\n", lblStyle.Render("Security:"), lipgloss.NewStyle().Bold(true).Foreground(ColorSuccess).Render("E2EE (X25519 + AES-256-GCM)")))
 	content.WriteString(fmt.Sprintf(" %s %s\n", lblStyle.Render("Session:"), lipgloss.NewStyle().Foreground(ColorPrimary).Render(m.SessionID)))
 	content.WriteString(fmt.Sprintf(" %s %s\n", lblStyle.Render("Invite:"), lipgloss.NewStyle().Foreground(ColorAccent).Render(fmt.Sprintf("fling send <file> --to %s:%d", primaryIP, m.Port))))
 
@@ -232,7 +231,8 @@ func (m Model) renderChatPane(width, height int) string {
 	var targetDesc string
 	if len(m.Peers) > 0 && m.SelectedPeerIdx < len(m.Peers) {
 		p := m.Peers[m.SelectedPeerIdx]
-		targetDesc = fmt.Sprintf("with %s (%s)", p.Hostname, p.Addr())
+		e2eeBadge := lipgloss.NewStyle().Foreground(ColorSuccess).Bold(true).Render(" [E2EE: AES-256-GCM]")
+		targetDesc = fmt.Sprintf("with %s (%s)%s", p.Hostname, p.Addr(), e2eeBadge)
 	} else {
 		targetDesc = "(select peer to chat)"
 	}
@@ -262,8 +262,8 @@ func (m Model) renderChatPane(width, height int) string {
 
 		welcomeText := lipgloss.JoinVertical(
 			lipgloss.Left,
-			lipgloss.NewStyle().Bold(true).Foreground(ColorSecondary).Render("Direct P2P Instant Messaging"),
-			lipgloss.NewStyle().Foreground(ColorTextDim).Render("Encrypted datagrams delivered directly between peers without servers."),
+			lipgloss.NewStyle().Bold(true).Foreground(ColorSecondary).Render("Direct P2P Encrypted Messaging"),
+			lipgloss.NewStyle().Foreground(ColorTextDim).Render("End-to-End Encrypted (X25519 ECDH + AES-256-GCM) directly between peers."),
 			"",
 			lipgloss.NewStyle().Foreground(ColorMuted).Render("Press [Enter] or [m] to type a message."),
 		)

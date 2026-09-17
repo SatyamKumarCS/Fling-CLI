@@ -7,7 +7,7 @@
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
 [![CI & PR Checks](https://github.com/SatyamKumarCS/Fling-CLI/actions/workflows/ci.yml/badge.svg)](https://github.com/SatyamKumarCS/Fling-CLI/actions/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20|%20Linux%20|%20Windows-blueviolet?style=flat)](https://github.com/SatyamKumarCS/Fling-CLI)
-[![Tests](https://img.shields.io/badge/Tests-24%20Passed%20(100%25)-50FA7B?style=flat)](https://github.com/SatyamKumarCS/Fling-CLI)
+[![Tests](https://img.shields.io/badge/Tests-42%20Passed%20(100%25)-50FA7B?style=flat)](https://github.com/SatyamKumarCS/Fling-CLI)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 <br/>
@@ -21,11 +21,12 @@
 ## Features
 
 - **Zero-Config Discovery**: Automatically finds active peers on the LAN via UDP subnet broadcast (stale peers pruned after 10s).
+- **End-to-End Encryption (E2EE)**: Automatic zero-config **X25519 Elliptic Curve Diffie-Hellman (ECDH)** key agreement and **AES-256-GCM** authenticated encryption across all instant messages and file transfers (zero plaintext on wire).
 - **Custom Reliable UDP Protocol**: Stop-and-Wait ARQ, sequence numbers, packet deduplication, and out-of-order chunk reassembly built directly on raw sockets (no TCP/HTTP).
 - **Consent-First Handshake**: Senders request transfer with file metadata; transfers only begin upon recipient confirmation.
 - **End-to-End CRC32 Integrity**: Packets and fully reassembled files are verified with IEEE CRC32 checksums (zero silent corruption).
 - **Native File Manager Reveal**: Press <kbd>o</kbd> to immediately highlight received files in macOS Finder, Windows Explorer, or Linux File Managers.
-- **Direct Instant Messaging**: Chat directly with any online peer without initiating file transfers.
+- **Direct Encrypted Instant Messaging**: Chat directly with any online peer without initiating file transfers.
 
 ---
 

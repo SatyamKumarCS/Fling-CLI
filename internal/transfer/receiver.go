@@ -86,6 +86,7 @@ type StreamReceiver struct {
 	expectedChecksum uint32
 	outputPath       string
 	progress         cli.ProgressFunc
+	key              []byte
 	chunkChan        chan protocol.Packet
 }
 
@@ -108,6 +109,11 @@ func NewStreamReceiver(
 	}
 }
 
+// SetKey sets the AES-256-GCM decryption key for incoming stream payload decryption.
+func (s *StreamReceiver) SetKey(key []byte) {
+	s.key = key
+}
+
 // Feed inputs a received FileChunk or FileEnd packet into the stream.
 func (s *StreamReceiver) Feed(packet protocol.Packet) {
 	select {
@@ -127,7 +133,7 @@ func (s *StreamReceiver) ProcessChunk(packet protocol.Packet) (bool, error) {
 				s.progress(s.reassembler.ReceivedBytes(), s.expectedSize)
 			}
 		case protocol.FileEnd:
-			err := s.reassembler.SaveToFile(s.outputPath)
+			err := s.reassembler.SaveToFileWithKey(s.outputPath, s.key)
 			return true, err
 		}
 	}

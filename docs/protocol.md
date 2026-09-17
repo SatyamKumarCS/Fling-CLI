@@ -53,12 +53,12 @@ Every Fling packet consists of a fixed **11-byte header** in Network Byte Order 
 
 | Type Code | Constant Name | Semantics | Payload Format |
 |---|---|---|---|
-| `0x01` | `PRESENCE` | LAN broadcast announcement | JSON: `{"Hostname":"...","SessionID":"...","Port":9999}` |
+| `0x01` | `PRESENCE` | LAN broadcast / subnet beacon | Pipe-delimited: `<hostname>\|<session_id>\|<port>\|<hex_x25519_pubkey>` |
 | `0x02` | `TRANSFER_REQUEST` | Outgoing file transfer initiation | Pipe-delimited: `<filename>\|<filesize_bytes>\|<crc32_hex>` |
 | `0x03` | `TRANSFER_ACCEPT` | Recipient consent to receive file | Empty or optional handshake response |
 | `0x04` | `TRANSFER_REJECT` | Recipient refusal of transfer | Empty or optional rejection reason |
-| `0x05` | `MSG` | Direct P2P text message | JSON: `{"Sender":"...","Content":"...","Timestamp":12345}` |
-| `0x06` | `FILE_CHUNK` | Fixed-size binary file slice | Raw binary slice (default: 1024 bytes) |
+| `0x05` | `MSG` | Direct P2P text message | AES-256-GCM Encrypted JSON: `{"sender":"...","content":"...","timestamp":"..."}` |
+| `0x06` | `FILE_CHUNK` | Binary file slice | AES-256-GCM Encrypted slice (default: 1024 bytes) |
 | `0x07` | `FILE_END` | Transfer completion sentinel | Empty |
 | `0x08` | `ACK` | Transmission acknowledgement | Empty |
 
@@ -66,11 +66,14 @@ Every Fling packet consists of a fixed **11-byte header** in Network Byte Order 
 
 ## 4. Protocol Phases
 
-### 4.1 Peer Discovery
-1. Nodes periodically (every 2.0s) broadcast a `PRESENCE` packet to `255.255.255.255:9999` and all detected interface broadcast masks.
+### 4.1 Peer Discovery & Key Exchange
+1. Nodes periodically (every 1.0s) broadcast a `PRESENCE` packet containing their hostname, session ID, service port, and **32-byte X25519 Public Key** to LAN broadcast and across the active subnet.
 2. Nodes listen on UDP port 9999 (or fallback ports 9998, 9997...).
-3. Discovered peers are recorded with `Hostname`, `IP`, `Port`, `SessionID`, and `LastSeen`.
-4. Nodes not heard from within **10 seconds** are expired and pruned from the peer list.
+3. Upon receiving a peer's presence announcement, both nodes perform **X25519 Elliptic Curve Diffie-Hellman (ECDH)** key agreement:
+   $$\text{SharedSecret} = \text{ECDH}(\text{LocalPrivKey}, \text{RemotePubKey})$$
+   $$\text{SymmetricKey} = \text{SHA-256}(\text{SharedSecret})$$
+4. The derived 256-bit symmetric key is cached for all subsequent chat messages and file transfers with that peer.
+5. Nodes not heard from within **10 seconds** are expired and pruned from the peer list.
 
 ### 4.2 Consent Handshake
 1. **Initiator:** Sends `TRANSFER_REQUEST` with sequence $S$.
@@ -80,24 +83,28 @@ Every Fling packet consists of a fixed **11-byte header** in Network Byte Order 
    - If declined, responder sends `TRANSFER_REJECT` with sequence $S+1$.
 4. **Timeout:** If no response is received within **30 seconds**, initiator aborts cleanly.
 
-### 4.3 Reliable Data Transfer (Stop-and-Wait ARQ)
-1. Sender segments file into 1024-byte `FILE_CHUNK` packets with sequential sequence numbers.
-2. For each chunk:
+### 4.3 Reliable Encrypted Data Transfer (Stop-and-Wait ARQ + AES-256-GCM)
+1. Sender encrypts the file byte stream using **AES-256-GCM** with the derived symmetric key and a random 12-byte nonce.
+2. Sender segments the encrypted payload into 1024-byte `FILE_CHUNK` packets with sequential sequence numbers.
+3. For each chunk:
    - Sender transmits packet and starts retransmission timer (initial: 500ms).
    - Receiver validates CRC32, reorders chunk into memory buffer, and replies with `ACK` (matching sequence number).
    - If ACK is not received before deadline, sender retransmits with exponential backoff up to **6 retries**.
    - If maximum retries are exhausted, transfer is aborted with error.
-3. Upon transmitting all chunks, sender transmits `FILE_END` packet.
+4. Upon transmitting all chunks, sender transmits `FILE_END` packet.
 
-### 4.4 End-to-End Verification
+### 4.4 End-to-End Decryption & Verification
 1. Receiver verifies all contiguous sequence chunks $[S_{start}, S_{end}]$ are present.
-2. Receiver calculates IEEE CRC32 checksum of entire assembled file.
-3. Receiver compares computed CRC32 against expected checksum received in `TRANSFER_REQUEST`.
-4. If checksums match, file is committed to disk (`<filename>` or `received_<filename>`). If mismatch, file is discarded with error.
+2. Receiver decrypts the reassembled byte stream using AES-256-GCM with the peer's shared key and validates the GCM authentication tag.
+3. Receiver calculates IEEE CRC32 checksum of the decrypted file data.
+4. Receiver compares computed CRC32 against expected checksum received in `TRANSFER_REQUEST`.
+5. If checksums match, file is committed to disk (`<filename>` or `received_<filename>`). If mismatch or authentication failure, file is discarded with error.
 
 ---
 
-## 5. Security & Scope Considerations
-- **Intended Scope:** Local Area Network (LAN) / Same broadcast domain.
-- **Zero Configuration:** No hardcoded IPs or central registry required.
-- **Observability:** Explicit logging for packet delivery, ACKs, retransmissions, and checksums.
+## 5. Security & Cryptographic Architecture
+- **Zero Configuration End-to-End Encryption (E2EE):** Automatic key exchange over local Wi-Fi with no certificate authorities or centralized servers required.
+- **Key Exchange:** Ephemeral X25519 Elliptic Curve Diffie-Hellman (RFC 7748 / NIST Curve25519) + SHA-256 key derivation.
+- **Authenticated Symmetric Cipher:** AES-256 in Galois/Counter Mode (GCM) with 96-bit random nonce and 128-bit authentication tag.
+- **Tamper Resistance:** Any in-transit packet modification or eavesdropping attempt on Wi-Fi fails GCM tag verification and is dropped immediately.
+- **Pure Go Standard Library:** Zero external cryptographic dependencies (`crypto/ecdh`, `crypto/aes`, `crypto/cipher`, `crypto/sha256`, `crypto/rand`).

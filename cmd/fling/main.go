@@ -20,6 +20,7 @@ import (
 	"github.com/SatyamKumarCS/Fling-CLI/internal/messaging"
 	"github.com/SatyamKumarCS/Fling-CLI/internal/network"
 	"github.com/SatyamKumarCS/Fling-CLI/internal/protocol"
+	"github.com/SatyamKumarCS/Fling-CLI/internal/security"
 	"github.com/SatyamKumarCS/Fling-CLI/internal/transfer"
 	"github.com/SatyamKumarCS/Fling-CLI/internal/tui"
 )
@@ -160,8 +161,8 @@ func runTUI(port int, initialPeer string) {
 		peer, isNew := disco.HandlePresence(packet, addr.IP.String())
 		if isNew {
 			p.Send(tui.PeerEventMsg{})
-			// Immediate bidirectional presence response: reply directly to sender
-			respPacket := discovery.CreatePresencePacket(disco.Hostname, disco.SessionID, disco.Port, 0)
+			// Immediate bidirectional presence response: reply directly to sender with public key
+			respPacket := discovery.CreatePresencePacket(disco.Hostname, disco.SessionID, disco.Port, 0, disco.KeyPair.PublicKeyBytes())
 			if encoded, err := protocol.Encode(respPacket); err == nil {
 				// Reply to sender's source port
 				_, _ = router.Conn().WriteToUDP(encoded, addr)
@@ -177,7 +178,8 @@ func runTUI(port int, initialPeer string) {
 	}
 
 	router.OnMsg = func(packet protocol.Packet, addr *net.UDPAddr) {
-		msg, err := messaging.ParseMessage(packet)
+		sharedKey, _ := disco.GetPeerSharedKeyByAddr(addr.String())
+		msg, err := messaging.ParseMessageWithKey(packet, sharedKey)
 		if err == nil {
 			p.Send(tui.NewIncomingMessageMsg(msg))
 		}
@@ -249,7 +251,7 @@ func runSend(args []string) {
 		os.Exit(1)
 	}
 
-	targetAddr, err := resolvePeerAddr(targetPeer)
+	targetAddr, sharedKey, err := resolvePeerAddr(targetPeer)
 	if err != nil {
 		fmt.Printf("[ERROR] Failed to resolve peer %q: %v\n", targetPeer, err)
 		os.Exit(1)
@@ -308,10 +310,11 @@ func runSend(args []string) {
 	fmt.Printf("[TRANSFER ACCEPTED] Peer accepted. Sending %s...\n", filepath.Base(filePath))
 	pb := cli.NewProgressBar(size, filepath.Base(filePath))
 
-	_, err = transfer.SendFile(
+	_, err = transfer.SendFileWithKey(
 		conn,
 		targetAddr,
 		filePath,
+		sharedKey,
 		2,
 		func(transferred, total int64) {
 			pb.Update(transferred)
@@ -348,7 +351,7 @@ func runMsg(args []string) {
 		os.Exit(1)
 	}
 
-	targetAddr, err := resolvePeerAddr(targetPeer)
+	targetAddr, sharedKey, err := resolvePeerAddr(targetPeer)
 	if err != nil {
 		fmt.Printf("[ERROR] Failed to resolve peer %q: %v\n", targetPeer, err)
 		os.Exit(1)
@@ -366,7 +369,7 @@ func runMsg(args []string) {
 		hostname = "fling-client"
 	}
 
-	err = messaging.SendMessage(conn, targetAddr, hostname, text, 1)
+	err = messaging.SendMessageWithKey(conn, targetAddr, hostname, text, sharedKey, 1)
 	if err != nil {
 		fmt.Printf("[ERROR] Failed to send message to %s: %v\n", targetAddr, err)
 		os.Exit(1)
@@ -419,37 +422,39 @@ func runPeers(args []string) {
 	cli.PrintPeers(peers)
 }
 
-func resolvePeerAddr(target string) (*net.UDPAddr, error) {
+func resolvePeerAddr(target string) (*net.UDPAddr, []byte, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
-		return nil, fmt.Errorf("empty peer target")
+		return nil, nil, fmt.Errorf("empty peer target")
 	}
 
-	// 1. Direct IP:Port (e.g. 127.0.0.1:9999 or 192.168.1.5:9998)
-	if strings.Contains(target, ":") {
-		return net.ResolveUDPAddr("udp4", target)
-	}
+	hostname, _ := os.Hostname()
+	kp, _ := security.GenerateKeyPair()
+	disco := discovery.NewDiscovery(hostname, "probe", discovery.DiscoveryPort, kp)
 
-	// 2. Direct IP without port (e.g. 127.0.0.1 or 192.168.1.5) -> default to 9999
-	if ip := net.ParseIP(target); ip != nil {
-		return &net.UDPAddr{
-			IP:   ip,
-			Port: discovery.DiscoveryPort,
-		}, nil
-	}
-
-	// 3. Match against currently discovered peers (by peer number, hostname, or session ID)
 	conn, err := network.ListenUDP(0)
 	if err == nil {
 		defer conn.Close()
-		hostname, _ := os.Hostname()
-		disco := discovery.NewDiscovery(hostname, "probe", discovery.DiscoveryPort)
 		_ = disco.BroadcastPresence(conn, discovery.DiscoveryPort)
 
+		// Direct probe if target looks like IP or IP:Port
+		hostPart := target
+		portPart := discovery.DiscoveryPort
+		if strings.Contains(target, ":") {
+			parts := strings.Split(target, ":")
+			hostPart = parts[0]
+			if p, err := strconv.Atoi(parts[1]); err == nil && p > 0 {
+				portPart = p
+			}
+		}
+		if net.ParseIP(hostPart) != nil {
+			_ = disco.PingPeer(conn, hostPart, portPart)
+		}
+
 		buffer := make([]byte, 2048)
-		deadline := time.Now().Add(1200 * time.Millisecond)
+		deadline := time.Now().Add(800 * time.Millisecond)
 		for time.Now().Before(deadline) {
-			_ = conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+			_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 			n, senderAddr, err := conn.ReadFromUDP(buffer)
 			if err != nil {
 				continue
@@ -462,7 +467,8 @@ func resolvePeerAddr(target string) (*net.UDPAddr, error) {
 		}
 
 		if peer, ok := disco.FindPeer(target); ok {
-			return net.ResolveUDPAddr("udp4", peer.Addr())
+			addr, err := net.ResolveUDPAddr("udp4", peer.Addr())
+			return addr, peer.SharedKey, err
 		}
 
 		// If peers are found but target didn't match, print available peers
@@ -472,8 +478,23 @@ func resolvePeerAddr(target string) (*net.UDPAddr, error) {
 		}
 	}
 
+	// 1. Direct IP:Port (e.g. 127.0.0.1:9999 or 192.168.1.5:9998)
+	if strings.Contains(target, ":") {
+		addr, err := net.ResolveUDPAddr("udp4", target)
+		return addr, nil, err
+	}
+
+	// 2. Direct IP without port (e.g. 127.0.0.1 or 192.168.1.5) -> default to 9999
+	if ip := net.ParseIP(target); ip != nil {
+		return &net.UDPAddr{
+			IP:   ip,
+			Port: discovery.DiscoveryPort,
+		}, nil, nil
+	}
+
 	// Fallback: try resolving target as a hostname with default port
-	return net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", target, discovery.DiscoveryPort))
+	addr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", target, discovery.DiscoveryPort))
+	return addr, nil, err
 }
 
 func runUninstall() {

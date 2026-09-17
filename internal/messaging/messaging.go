@@ -10,6 +10,7 @@ import (
 
 	"github.com/SatyamKumarCS/Fling-CLI/internal/network"
 	"github.com/SatyamKumarCS/Fling-CLI/internal/protocol"
+	"github.com/SatyamKumarCS/Fling-CLI/internal/security"
 )
 
 var (
@@ -33,6 +34,7 @@ type Message struct {
 	Sender    string    `json:"sender"`
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
+	Encrypted bool      `json:"encrypted,omitempty"`
 }
 
 // CreateMessage creates a protocol.Packet of type Msg with the given sender, content,
@@ -43,6 +45,28 @@ func CreateMessage(
 	sequenceNumber uint32,
 ) (protocol.Packet, error) {
 	return CreateMessageWithTimestamp(sender, content, time.Now(), sequenceNumber)
+}
+
+// CreateEncryptedMessage creates a protocol.Packet of type Msg with JSON payload encrypted using AES-256-GCM.
+func CreateEncryptedMessage(
+	sender string,
+	content string,
+	key []byte,
+	sequenceNumber uint32,
+) (protocol.Packet, error) {
+	if len(key) == 32 {
+		pkt, err := CreateMessageWithTimestamp(sender, content, time.Now(), sequenceNumber)
+		if err != nil {
+			return protocol.Packet{}, err
+		}
+		cipherPayload, err := security.Encrypt(key, pkt.Payload)
+		if err != nil {
+			return protocol.Packet{}, fmt.Errorf("failed to encrypt message: %w", err)
+		}
+		pkt.Payload = cipherPayload
+		return pkt, nil
+	}
+	return CreateMessage(sender, content, sequenceNumber)
 }
 
 // CreateMessageWithTimestamp creates a protocol.Packet of type Msg with a specified timestamp.
@@ -79,6 +103,36 @@ func CreateMessageWithTimestamp(
 		Type:           protocol.Msg,
 		Payload:        payload,
 	}, nil
+}
+
+// ParseMessageWithKey parses a message packet, decrypting the payload using AES-256-GCM if a key is provided.
+func ParseMessageWithKey(packet protocol.Packet, key []byte) (Message, error) {
+	if packet.Type != protocol.Msg {
+		return Message{}, ErrInvalidPacket
+	}
+	if len(packet.Payload) == 0 {
+		return Message{}, ErrEmptyPayload
+	}
+
+	payload := packet.Payload
+	wasEncrypted := false
+	if len(key) == 32 {
+		if decrypted, err := security.Decrypt(key, payload); err == nil {
+			payload = decrypted
+			wasEncrypted = true
+		}
+	}
+
+	tempPacket := protocol.Packet{
+		SequenceNumber: packet.SequenceNumber,
+		Type:           packet.Type,
+		Payload:        payload,
+	}
+	msg, err := ParseMessage(tempPacket)
+	if err == nil {
+		msg.Encrypted = wasEncrypted
+	}
+	return msg, err
 }
 
 // ParseMessage extracts and validates a Message from a protocol.Packet.
@@ -152,6 +206,18 @@ func SendMessage(
 	content string,
 	sequenceNumber uint32,
 ) error {
+	return SendMessageWithKey(conn, addr, sender, content, nil, sequenceNumber)
+}
+
+// SendMessageWithKey sends a text message (optionally encrypted with key) reliably to the specified UDP address.
+func SendMessageWithKey(
+	conn *net.UDPConn,
+	addr *net.UDPAddr,
+	sender string,
+	content string,
+	key []byte,
+	sequenceNumber uint32,
+) error {
 	if conn == nil {
 		return ErrNilConnection
 	}
@@ -159,7 +225,7 @@ func SendMessage(
 		return ErrNilAddress
 	}
 
-	packet, err := CreateMessage(sender, content, sequenceNumber)
+	packet, err := CreateEncryptedMessage(sender, content, key, sequenceNumber)
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/SatyamKumarCS/Fling-CLI/internal/security"
 )
 
 // Reassembler collects file chunks and validates file size and checksum before saving.
@@ -34,20 +36,31 @@ func (r *Reassembler) ReceivedBytes() int64 {
 	return r.receivedBytes
 }
 
-// Finalize verifies the reassembled data against ExpectedSize and ExpectedChecksum,
-// returning the verified data bytes or an error if validation fails.
+// Finalize verifies the reassembled data against ExpectedSize and ExpectedChecksum.
 func (r *Reassembler) Finalize() ([]byte, error) {
-	if r.receivedBytes != r.ExpectedSize {
+	return r.FinalizeWithKey(nil)
+}
+
+// FinalizeWithKey decrypts (if key is provided) and verifies the reassembled file.
+func (r *Reassembler) FinalizeWithKey(key []byte) ([]byte, error) {
+	rawBytes := r.buffer.Bytes()
+	if len(key) == 32 {
+		decrypted, err := security.Decrypt(key, rawBytes)
+		if err != nil {
+			return nil, fmt.Errorf("file decryption failed: %w", err)
+		}
+		rawBytes = decrypted
+	}
+
+	if int64(len(rawBytes)) != r.ExpectedSize {
 		return nil, fmt.Errorf(
 			"file size mismatch: expected %d bytes, got %d bytes",
 			r.ExpectedSize,
-			r.receivedBytes,
+			len(rawBytes),
 		)
 	}
 
-	data := r.buffer.Bytes()
-	actualChecksum := CalculateBytesChecksum(data)
-
+	actualChecksum := CalculateBytesChecksum(rawBytes)
 	if actualChecksum != r.ExpectedChecksum {
 		return nil, fmt.Errorf(
 			"checksum mismatch: expected %08x, got %08x",
@@ -56,12 +69,17 @@ func (r *Reassembler) Finalize() ([]byte, error) {
 		)
 	}
 
-	return data, nil
+	return rawBytes, nil
 }
 
 // SaveToFile verifies the reassembled file and writes it to outputPath.
 func (r *Reassembler) SaveToFile(outputPath string) error {
-	data, err := r.Finalize()
+	return r.SaveToFileWithKey(outputPath, nil)
+}
+
+// SaveToFileWithKey decrypts (if key provided), verifies, and writes the reassembled file to outputPath.
+func (r *Reassembler) SaveToFileWithKey(outputPath string, key []byte) error {
+	data, err := r.FinalizeWithKey(key)
 	if err != nil {
 		return err
 	}
