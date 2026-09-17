@@ -33,6 +33,7 @@ USAGE:
   fling msg "<text>" --to <peer>         Send a text message directly to a peer
   fling peers                            Discover and display active peers
   fling version                          Show version information
+  fling update                           Update Fling to the latest version
   fling uninstall                        Remove Fling from this machine
 
 FLAGS:
@@ -55,6 +56,9 @@ EXAMPLES:
   # Send a file to a peer
   fling send document.pdf --to 127.0.0.1:9999
   fling send photos.zip --to bob-desktop
+
+  # Update Fling to the latest version
+  fling update
 
   # Uninstall Fling
   fling uninstall

@@ -26,6 +26,11 @@ install: build
 	fi
 	@echo "==> Successfully installed $(BINARY_NAME) to $(INSTALL_DIR)/$(BINARY_NAME)"
 
+## update: Update fling binary to the latest version
+update:
+	@echo "==> Updating $(BINARY_NAME)..."
+	@./update.sh
+
 ## uninstall: Remove fling binary from system PATH
 uninstall:
 	@echo "==> Uninstalling $(BINARY_NAME)..."

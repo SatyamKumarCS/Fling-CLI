@@ -122,6 +122,10 @@ echo -e "    ${COLOR_CYAN}fling version${COLOR_RESET}                   Check in
 echo -e "    ${COLOR_CYAN}which fling${COLOR_RESET}                     Show binary location in \$PATH"
 echo -e "    ${COLOR_CYAN}fling --help${COLOR_RESET}                    Display command manual & flags\n"
 
+echo -e "  ${COLOR_BOLD}🔄 UPDATE & UPGRADE:${COLOR_RESET}"
+echo -e "    ${COLOR_CYAN}fling update${COLOR_RESET}                    Update Fling to the latest version"
+echo -e "    ${COLOR_CYAN}./update.sh${COLOR_RESET}                     Run updater script directly\n"
+
 echo -e "  ${COLOR_BOLD}🗑️  UNINSTALLATION:${COLOR_RESET}"
 echo -e "    ${COLOR_CYAN}fling uninstall${COLOR_RESET}                 Remove Fling from this system"
 echo -e "    ${COLOR_CYAN}make uninstall${COLOR_RESET}                  Remove Fling via Makefile\n"

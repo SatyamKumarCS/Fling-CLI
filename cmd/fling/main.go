@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -39,6 +40,8 @@ func main() {
 		cli.PrintHelp()
 	case "version", "--version", "-v":
 		fmt.Printf("Fling CLI v%s\n", cli.Version)
+	case "update", "upgrade":
+		runUpdate()
 	case "uninstall":
 		runUninstall()
 	case "send":
@@ -519,4 +522,108 @@ func runUninstall() {
 
 	successStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00E676"))
 	fmt.Printf("%s Successfully uninstalled Fling from %s\n", successStyle.Render("[SUCCESS]"), execPath)
+}
+
+func runUpdate() {
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7D56F4"))
+	successStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00E676"))
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6272A4"))
+
+	fmt.Printf("%s Checking for Fling updates (current version: v%s)...\n", headerStyle.Render("[UPDATE]"), cli.Version)
+
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("[ERROR] Could not determine executable location: %v\n", err)
+		os.Exit(1)
+	}
+	if resolved, err := filepath.EvalSymlinks(execPath); err == nil {
+		execPath = resolved
+	}
+
+	// 1. Check if Go is installed
+	goPath, err := exec.LookPath("go")
+	if err != nil {
+		fmt.Println("[ERROR] Go compiler (go) is required to build Fling updates.")
+		fmt.Println("Please install Go from https://go.dev/dl/")
+		os.Exit(1)
+	}
+
+	// 2. Check if we're running inside a local clone of the repository
+	if _, err := os.Stat("go.mod"); err == nil {
+		if _, err := os.Stat("cmd/fling/main.go"); err == nil {
+			fmt.Printf("%s Compiling update from local repository...\n", dimStyle.Render("→"))
+			cmd := exec.Command(goPath, "build", "-ldflags=-s -w", "-o", execPath, "./cmd/fling")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err == nil {
+				fmt.Printf("%s Fling successfully updated to v%s at %s\n", successStyle.Render("[SUCCESS]"), cli.Version, execPath)
+				return
+			}
+		}
+	}
+
+	// 3. Remote update: Clone latest from GitHub and build
+	tmpDir, err := os.MkdirTemp("", "fling-update-*")
+	if err != nil {
+		fmt.Printf("[ERROR] Failed to create temporary directory: %v\n", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	fmt.Printf("%s Fetching latest code from GitHub (SatyamKumarCS/Fling-CLI)...\n", dimStyle.Render("→"))
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		// Fallback to go install
+		fmt.Printf("%s Using 'go install' to update...\n", dimStyle.Render("→"))
+		cmd := exec.Command(goPath, "install", "github.com/SatyamKumarCS/Fling-CLI/cmd/fling@latest")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("[ERROR] Update failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("%s Fling successfully updated to the latest version!\n", successStyle.Render("[SUCCESS]"))
+		return
+	}
+
+	cloneCmd := exec.Command(gitPath, "clone", "--quiet", "--depth", "1", "https://github.com/SatyamKumarCS/Fling-CLI.git", tmpDir)
+	if err := cloneCmd.Run(); err != nil {
+		fmt.Printf("[ERROR] Failed to clone latest repository: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("%s Compiling latest release...\n", dimStyle.Render("→"))
+	compiledBin := filepath.Join(tmpDir, "fling_new")
+	buildCmd := exec.Command(goPath, "build", "-ldflags=-s -w", "-o", compiledBin, "./cmd/fling")
+	buildCmd.Dir = tmpDir
+	if err := buildCmd.Run(); err != nil {
+		fmt.Printf("[ERROR] Build failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("%s Installing updated binary to %s...\n", dimStyle.Render("→"), execPath)
+	installCmd := exec.Command("install", "-m", "755", compiledBin, execPath)
+	if err := installCmd.Run(); err != nil {
+		inData, err := os.ReadFile(compiledBin)
+		if err != nil {
+			fmt.Printf("[ERROR] Failed to read compiled binary: %v\n", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(execPath, inData, 0755); err != nil {
+			fmt.Printf("[ERROR] Failed to write updated binary to %s: %v\n", execPath, err)
+			fmt.Println("Tip: Try running with sudo: sudo fling update")
+			os.Exit(1)
+		}
+	}
+
+	var newVer string
+	verCmd := exec.Command(execPath, "version")
+	if out, err := verCmd.Output(); err == nil {
+		newVer = strings.TrimSpace(string(out))
+	}
+	if newVer == "" {
+		newVer = fmt.Sprintf("Fling CLI v%s", cli.Version)
+	}
+
+	fmt.Printf("%s Successfully updated to %s (%s)\n", successStyle.Render("[SUCCESS]"), newVer, execPath)
 }

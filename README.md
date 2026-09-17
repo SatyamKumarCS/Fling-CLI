@@ -105,7 +105,7 @@ fling msg "Deployment complete on staging server." --to 1
 
 ---
 
-## Verification & Uninstallation
+## Verification, Updates & Uninstallation
 
 ### Verify Installation
 ```bash
@@ -117,6 +117,18 @@ which fling
 
 # View command guide & flags
 fling --help
+```
+
+### Updating Fling
+```bash
+# Option 1: Native CLI command
+fling update
+
+# Option 2: Via updater script
+curl -fsSL https://raw.githubusercontent.com/SatyamKumarCS/Fling-CLI/main/update.sh | bash
+
+# Option 3: Via Makefile
+make update
 ```
 
 ### Uninstallation
