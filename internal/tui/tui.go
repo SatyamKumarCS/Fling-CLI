@@ -113,6 +113,7 @@ type (
 	}
 	TransferRejectedMsg struct{ Filename string }
 	AddLogMsg           LogRecord
+	FilePickedMsg       string
 )
 
 // NewModel initializes the TUI model
@@ -310,6 +311,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AddLogMsg:
 		m.addLog(msg.Level, msg.Message)
 
+	case FilePickedMsg:
+		if string(msg) != "" {
+			m.FileInput.SetValue(string(msg))
+			m.setNotification(fmt.Sprintf("Selected: %s", filepath.Base(string(msg))))
+		}
+
 	case tea.KeyMsg:
 		// Help modal handling (close on Esc, ?, q, Enter, Space)
 		if m.ShowHelp {
@@ -345,6 +352,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.SelectingFile = false
 				m.FileInput.Reset()
 				return m, nil
+			case "ctrl+o", "ctrl+f":
+				return m, func() tea.Msg {
+					path, err := cli.PickFileWithNativeDialog()
+					if err != nil || path == "" {
+						return nil
+					}
+					return FilePickedMsg(path)
+				}
 			case "enter":
 				filePath := strings.TrimSpace(m.FileInput.Value())
 				m.SelectingFile = false

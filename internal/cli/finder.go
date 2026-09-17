@@ -60,6 +60,45 @@ func RevealInFileManager(targetPath string) error {
 	return cmd.Start()
 }
 
+// PickFileWithNativeDialog opens the native OS file picker (Finder modal on macOS,
+// File Dialog on Windows, zenity/kdialog on Linux) and returns the chosen file's path.
+func PickFileWithNativeDialog() (string, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		script := `POSIX path of (choose file with prompt "Select a file to send with Fling:")`
+		cmd := exec.Command("osascript", "-e", script)
+		out, err := cmd.Output()
+		if err != nil {
+			return "", err
+		}
+		return stringsTrim(string(out)), nil
+	case "windows":
+		psScript := `Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Title = 'Select a file to send with Fling'; if($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){ Write-Host $f.FileName }`
+		cmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
+		out, err := cmd.Output()
+		if err != nil {
+			return "", err
+		}
+		return stringsTrim(string(out)), nil
+	default: // Linux
+		if _, err := exec.LookPath("zenity"); err == nil {
+			cmd := exec.Command("zenity", "--file-selection", "--title=Select a file to send with Fling")
+			out, err := cmd.Output()
+			if err == nil {
+				return stringsTrim(string(out)), nil
+			}
+		}
+		if _, err := exec.LookPath("kdialog"); err == nil {
+			cmd := exec.Command("kdialog", "--getopenfilename")
+			out, err := cmd.Output()
+			if err == nil {
+				return stringsTrim(string(out)), nil
+			}
+		}
+		return "", fmt.Errorf("no supported GUI file dialog found")
+	}
+}
+
 func stringsTrim(s string) string {
 	for len(s) > 0 && (s[0] == ' ' || s[0] == '\t' || s[0] == '\n' || s[0] == '\r' || s[0] == '"' || s[0] == '\'') {
 		s = s[1:]

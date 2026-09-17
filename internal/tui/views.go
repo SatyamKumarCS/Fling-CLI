@@ -389,11 +389,11 @@ func (m Model) renderFileDialogBox(width, height int) string {
 
 	hint := lipgloss.NewStyle().
 		Foreground(ColorTextDim).
-		Render("Enter file path (e.g. tests/test.txt or /path/to/doc.pdf):")
+		Render("Type path, drag-and-drop from Finder, or press [Ctrl+O] to browse:")
 
 	footer := lipgloss.NewStyle().
 		Foreground(ColorMuted).
-		Render("Press [Enter] to send  •  [Esc] to cancel")
+		Render("Press [Enter] Send  •  [Ctrl+O] Browse Finder  •  [Esc] Cancel")
 
 	box := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -485,7 +485,7 @@ func (m Model) renderHelpBox(width, height int) string {
 		{"1, 2, 3, 4", "Jump directly to Pane (1-4)"},
 		{"Up / Down", "Navigate through Discovered Peers"},
 		{"Enter / c / m", "Open live chat with selected peer"},
-		{"F / s", "Send file to selected peer"},
+		{"F / s", "Send file modal (Ctrl+O to browse Finder)"},
 		{"o / O", "Reveal received file / folder in Finder"},
 		{"r", "Scan / refresh LAN peer discovery"},
 		{"y / n", "Accept / Decline incoming transfer"},
