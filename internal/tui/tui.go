@@ -210,6 +210,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Peers = m.Discovery.GetPeers()
 
 	case NewIncomingMessageMsg:
+		// Deduplicate: check if last message from same sender with identical content arrived in last 3 seconds
+		isDup := false
+		now := time.Now()
+		for i := len(m.Messages) - 1; i >= 0 && i >= len(m.Messages)-5; i-- {
+			if !m.Messages[i].IsMe &&
+				m.Messages[i].Sender == msg.Sender &&
+				m.Messages[i].Content == msg.Content &&
+				now.Sub(m.Messages[i].Timestamp) < 3*time.Second {
+				isDup = true
+				break
+			}
+		}
+		if isDup {
+			return m, nil
+		}
+
 		m.Messages = append(m.Messages, ChatMessage{
 			Sender:    msg.Sender,
 			Content:   msg.Content,

@@ -17,6 +17,9 @@ type Router struct {
 	ackWaiters map[uint32]chan protocol.Packet
 	respWait   map[uint32]chan protocol.Packet
 
+	// Deduplication cache for incoming reliable packets (Msg, TransferRequest)
+	seenPackets map[string]time.Time
+
 	// Packet Handlers
 	OnPresence        func(p protocol.Packet, addr *net.UDPAddr)
 	OnMsg             func(p protocol.Packet, addr *net.UDPAddr)
@@ -33,11 +36,37 @@ type Router struct {
 // NewRouter creates a new UDP packet router for the given connection.
 func NewRouter(conn *net.UDPConn) *Router {
 	return &Router{
-		conn:       conn,
-		ackWaiters: make(map[uint32]chan protocol.Packet),
-		respWait:   make(map[uint32]chan protocol.Packet),
-		stopChan:   make(chan struct{}),
+		conn:        conn,
+		ackWaiters:  make(map[uint32]chan protocol.Packet),
+		respWait:    make(map[uint32]chan protocol.Packet),
+		seenPackets: make(map[string]time.Time),
+		stopChan:    make(chan struct{}),
 	}
+}
+
+// isDuplicatePacket checks if a packet with seqNum from senderAddr was already processed in the last 60s.
+func (r *Router) isDuplicatePacket(senderAddr *net.UDPAddr, seqNum uint32) bool {
+	key := fmt.Sprintf("%s:%d", senderAddr.String(), seqNum)
+	now := time.Now()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Periodic cleanup of stale deduplication entries
+	if len(r.seenPackets) > 500 {
+		for k, t := range r.seenPackets {
+			if now.Sub(t) > 60*time.Second {
+				delete(r.seenPackets, k)
+			}
+		}
+	}
+
+	if lastSeen, ok := r.seenPackets[key]; ok && now.Sub(lastSeen) < 60*time.Second {
+		return true
+	}
+
+	r.seenPackets[key] = now
+	return false
 }
 
 // Conn returns the underlying UDP connection.
@@ -102,8 +131,11 @@ func (r *Router) readLoop() {
 			}
 
 		case protocol.Msg:
-			// Automatically ACK incoming message
+			// Automatically ACK incoming message immediately so sender stops retrying
 			_ = SendACK(r.conn, packet.SequenceNumber, senderAddr)
+			if r.isDuplicatePacket(senderAddr, packet.SequenceNumber) {
+				continue // Skip duplicate delivery
+			}
 			if r.OnMsg != nil {
 				r.OnMsg(packet, senderAddr)
 			}
@@ -111,6 +143,9 @@ func (r *Router) readLoop() {
 		case protocol.TransferRequest:
 			// Automatically ACK transfer request packet
 			_ = SendACK(r.conn, packet.SequenceNumber, senderAddr)
+			if r.isDuplicatePacket(senderAddr, packet.SequenceNumber) {
+				continue // Skip duplicate delivery
+			}
 			if r.OnTransferRequest != nil {
 				r.OnTransferRequest(packet, senderAddr)
 			}
