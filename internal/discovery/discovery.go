@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/SatyamKumarCS/Fling-CLI/internal/protocol"
+	"github.com/SatyamKumarCS/Fling-CLI/internal/security"
 )
 
 const (
@@ -22,19 +24,27 @@ type Discovery struct {
 	Hostname  string
 	SessionID string
 	Port      int
+	KeyPair   *security.KeyPair
 	Peers     map[string]Peer
 	mu        sync.RWMutex
 }
 
 // NewDiscovery creates a new Discovery instance.
-func NewDiscovery(hostname string, sessionID string, port int) *Discovery {
+func NewDiscovery(hostname string, sessionID string, port int, keyPair ...*security.KeyPair) *Discovery {
 	if port <= 0 {
 		port = DiscoveryPort
+	}
+	var kp *security.KeyPair
+	if len(keyPair) > 0 && keyPair[0] != nil {
+		kp = keyPair[0]
+	} else {
+		kp, _ = security.GenerateKeyPair()
 	}
 	return &Discovery{
 		Hostname:  hostname,
 		SessionID: sessionID,
 		Port:      port,
+		KeyPair:   kp,
 		Peers:     make(map[string]Peer),
 	}
 }
@@ -64,17 +74,23 @@ func GetLocalIPs() []string {
 	return ips
 }
 
-// CreatePresencePacket creates a protocol.Presence packet containing the peer's metadata.
+// CreatePresencePacket creates a protocol.Presence packet containing the peer's metadata and optional X25519 public key.
 func CreatePresencePacket(
 	hostname string,
 	sessionID string,
 	port int,
 	sequenceNumber uint32,
+	pubKey ...[]byte,
 ) protocol.Packet {
 	if port <= 0 {
 		port = DiscoveryPort
 	}
-	payload := fmt.Sprintf("%s|%s|%d", hostname, sessionID, port)
+	var payload string
+	if len(pubKey) > 0 && len(pubKey[0]) == 32 {
+		payload = fmt.Sprintf("%s|%s|%d|%s", hostname, sessionID, port, hex.EncodeToString(pubKey[0]))
+	} else {
+		payload = fmt.Sprintf("%s|%s|%d", hostname, sessionID, port)
+	}
 	return protocol.Packet{
 		SequenceNumber: sequenceNumber,
 		Type:           protocol.Presence,
@@ -97,10 +113,17 @@ func ParsePresencePacket(packet protocol.Packet) (Peer, error) {
 				port = p
 			}
 		}
+		var pubKey []byte
+		if len(parts) >= 4 && parts[3] != "" {
+			if pk, err := hex.DecodeString(parts[3]); err == nil && len(pk) == 32 {
+				pubKey = pk
+			}
+		}
 		return Peer{
 			Hostname:  parts[0],
 			SessionID: parts[1],
 			Port:      port,
+			PublicKey: pubKey,
 			LastSeen:  time.Now(),
 		}, nil
 	}
@@ -118,7 +141,7 @@ func ParsePresencePacket(packet protocol.Packet) (Peer, error) {
 	return Peer{}, fmt.Errorf("invalid presence packet payload")
 }
 
-// HandlePresence updates the peer map with incoming presence announcement.
+// HandlePresence updates the peer map with incoming presence announcement and derives E2EE shared key.
 // Returns the updated peer and true if this is a newly discovered peer (not previously seen or previously expired).
 func (d *Discovery) HandlePresence(packet protocol.Packet, remoteIP string) (Peer, bool) {
 	peer, err := ParsePresencePacket(packet)
@@ -137,6 +160,13 @@ func (d *Discovery) HandlePresence(packet protocol.Packet, remoteIP string) (Pee
 	}
 	peer.LastSeen = time.Now()
 
+	// Derive E2EE shared symmetric key using X25519 ECDH if both sides have public keys
+	if d.KeyPair != nil && d.KeyPair.PrivateKey != nil && len(peer.PublicKey) == 32 {
+		if sharedKey, err := security.DeriveSharedKey(d.KeyPair.PrivateKey, peer.PublicKey); err == nil {
+			peer.SharedKey = sharedKey
+		}
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -144,6 +174,31 @@ func (d *Discovery) HandlePresence(packet protocol.Packet, remoteIP string) (Pee
 	d.Peers[peer.SessionID] = peer
 
 	return peer, !exists
+}
+
+// GetPeerSharedKey returns the derived symmetric key for the peer with the given session ID.
+func (d *Discovery) GetPeerSharedKey(sessionID string) ([]byte, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	peer, ok := d.Peers[sessionID]
+	if !ok || len(peer.SharedKey) == 0 {
+		return nil, false
+	}
+	return peer.SharedKey, true
+}
+
+// GetPeerSharedKeyByAddr returns the derived symmetric key for the peer at the given IP:Port or IP.
+func (d *Discovery) GetPeerSharedKeyByAddr(addrStr string) ([]byte, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	for _, p := range d.Peers {
+		if p.Addr() == addrStr || p.IP == addrStr {
+			if len(p.SharedKey) > 0 {
+				return p.SharedKey, true
+			}
+		}
+	}
+	return nil, false
 }
 
 // PruneStalePeers removes peers that have not been seen for longer than PeerTimeout.

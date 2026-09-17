@@ -10,6 +10,8 @@ type Peer struct {
 	IP        string    `json:"ip"`
 	Port      int       `json:"port"`
 	SessionID string    `json:"sessionId"`
+	PublicKey []byte    `json:"publicKey,omitempty"`
+	SharedKey []byte    `json:"-"`
 	LastSeen  time.Time `json:"lastSeen"`
 }
 
