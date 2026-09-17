@@ -303,46 +303,45 @@ func (d *Discovery) SweepLocalSubnet(conn *net.UDPConn, targetPort int) {
 			if !ok || ipNet.IP.To4() == nil {
 				continue
 			}
-			ip := ipNet.IP.To4()
+			ip4 := ipNet.IP.To4()
 			mask := ipNet.Mask
+			if len(mask) == 16 {
+				mask = mask[12:]
+			}
 			if len(mask) != 4 {
 				continue
 			}
 
-			startNet := ip.Mask(mask)
-			bcastIP := net.IPv4(
-				ip[0]|^mask[0],
-				ip[1]|^mask[1],
-				ip[2]|^mask[2],
-				ip[3]|^mask[3],
-			)
+			start3 := ip4[2] & mask[2]
+			end3 := ip4[2] | (^mask[2])
 
 			// 1. Immediately sweep the host's own /24 block first (fast path)
-			go func(b0, b1, b2, self byte) {
+			b0, b1, b2, selfHost := ip4[0], ip4[1], ip4[2], ip4[3]
+			go func(o0, o1, o2, self byte) {
 				for host := 1; host <= 254; host++ {
 					if byte(host) == self {
 						continue
 					}
-					targetIP := net.IPv4(b0, b1, b2, byte(host))
+					targetIP := net.IPv4(o0, o1, o2, byte(host))
 					targetAddr := &net.UDPAddr{IP: targetIP, Port: targetPort}
 					_, _ = conn.WriteToUDP(encoded, targetAddr)
 				}
-			}(ip[0], ip[1], ip[2], ip[3])
+			}(b0, b1, b2, selfHost)
 
-			// 2. If the subnet mask is larger than /24 (e.g. /19 or /20), sweep the remaining blocks in the subnet
-			if startNet[2] != bcastIP[2] {
-				go func(b0, b1, start3, end3, cur3, self byte) {
-					for octet3 := int(start3); octet3 <= int(end3); octet3++ {
-						if byte(octet3) == cur3 {
-							continue // already swept in fast path
-						}
+			// 2. If the subnet mask spans multiple /24 blocks (e.g. /19 or /20), sweep all remaining blocks in parallel
+			if start3 != end3 {
+				for o3 := int(start3); o3 <= int(end3); o3++ {
+					if byte(o3) == b2 {
+						continue // already swept in fast path
+					}
+					go func(o0, o1, cur3 byte) {
 						for host := 1; host <= 254; host++ {
-							targetIP := net.IPv4(b0, b1, byte(octet3), byte(host))
+							targetIP := net.IPv4(o0, o1, cur3, byte(host))
 							targetAddr := &net.UDPAddr{IP: targetIP, Port: targetPort}
 							_, _ = conn.WriteToUDP(encoded, targetAddr)
 						}
-					}
-				}(ip[0], ip[1], startNet[2], bcastIP[2], ip[2], ip[3])
+					}(b0, b1, byte(o3))
+				}
 			}
 		}
 	}
