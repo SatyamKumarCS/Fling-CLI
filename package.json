@@ -1,0 +1,67 @@
+{
+  "name": "fling-cli",
+  "version": "1.0.0",
+  "description": "Fast, zero-configuration peer-to-peer file transfer & messaging for your terminal (UDP / E2EE / TUI)",
+  "main": "bin/fling.js",
+  "bin": {
+    "fling": "./bin/fling.js",
+    "fling-cli": "./bin/fling.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js",
+    "start": "node bin/fling.js",
+    "build": "go build -ldflags=\"-s -w\" -o bin/fling-native ./cmd/fling",
+    "build:all": "node scripts/build-all.js",
+    "test": "node bin/fling.js version"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SatyamKumarCS/Fling-CLI.git"
+  },
+  "keywords": [
+    "fling",
+    "fling-cli",
+    "p2p",
+    "file-transfer",
+    "udp",
+    "arq",
+    "e2ee",
+    "encryption",
+    "x25519",
+    "aes-gcm",
+    "tui",
+    "bubbletea",
+    "airdrop",
+    "terminal"
+  ],
+  "author": "Satyam Kumar <https://github.com/SatyamKumarCS>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/SatyamKumarCS/Fling-CLI/issues"
+  },
+  "homepage": "https://github.com/SatyamKumarCS/Fling-CLI#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32",
+    "freebsd"
+  ],
+  "cpu": [
+    "x64",
+    "arm64",
+    "arm",
+    "ia32"
+  ],
+  "files": [
+    "bin",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

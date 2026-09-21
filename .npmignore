@@ -1,0 +1,33 @@
+# Source and dev files
+cmd/
+internal/
+testdata/
+tests/
+docs/
+assets/
+dist/
+
+# Go artifacts
+*.go
+go.mod
+go.sum
+coverage.out
+*.test
+
+# Compiled binaries in root
+fling
+fling.exe
+
+# Shell scripts
+fling.sh
+install.sh
+update.sh
+Makefile
+
+# Git and CI
+.git/
+.github/
+.gitignore
+.DS_Store
+.idea/
+.vscode/
