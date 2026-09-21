@@ -13,7 +13,9 @@
 <br/>
 
 <p align="center">
-  <img src="assets/dashboard.png" alt="Fling Interactive TUI Dashboard" width="95%" />
+  <video src="assets/brag.mp4" poster="assets/brag.jpg" width="95%" controls autoplay loop muted playsinline>
+    <img src="assets/brag.jpg" alt="Fling Interactive TUI Dashboard" width="95%" />
+  </video>
 </p>
 
 ---

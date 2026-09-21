@@ -1,18 +1,36 @@
-# Binaries
+# Binaries & Builds
+fling
 bin/
+dist/
 *.exe
 *.out
 
-# OS files
-.DS_Store
+# Agent Skills & Tooling Metadata
+.agents/
+skills-lock.json
+brag-output/
+brag-output-*/
+.hyperframes/
+node_modules/
 
-# IDE
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE & Editors
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 
-# Go
+# Go Test & Coverage
 *.test
 coverage.out
 
-# Temporary files
+# Temporary Files & Logs
 tmp/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
